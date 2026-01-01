@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>City Builder</title>
+</head>
+<body>
+    <header>
+        <div class="stat-box">
+            <span>Money: </span>
+            <span id="stat-money">$1000</span>
+        </div>
+        <div class="stat-box">
+            <span>Wood: </span>
+            <span id="stat-wood">50</span>
+        </div>
+        <div class="stat-box">
+            <span>Population: </span>
+            <span id="stat-population">0</span> 
+            <span> / </span>
+            <span id="stat-population-cap">0</span>
+        </div>
+        <div class="stat-box">
+            <span>Day: </span>
+            <span id="stat-day">1</span>
+        </div>
+    </header>
+    <div id="game-container">
+        <div id="city-grid"></div>
+        <div id="message-log">Welcome!</div>
+    </div>
+
+    <footer>
+        <div id="controls">
+            <button class="tool-button active" onclick="selectTool('select')">
+                <span>Cursor</span>
+                <span class="tool-cost">-</span>
+            </button>
+            <button class="tool-button" onclick="selectTool('road')">
+                <span>Road</span>
+                <span class="tool-cost">$10</span>
+            </button>
+            <button class="tool-button" onclick="selectTool('house')">
+                <span>House</span>
+                <span class="tool-cost">$50, 10W</span>
+            </button>
+            <button class="tool-button" onclick="selectTool('commercial')">
+                <span>Market</span>
+                <span class="tool-cost">$100, 20W</span>
+            </button>
+            <button class="tool-button" onclick="selectTool('industry')">
+                <span>Mill</span>
+                <span class="tool-cost"></span>
+            </button>
+            <button class="tool-btn" onclick="selectTool('park')">
+                <span>Park</span>
+                <span class="tool-cost">$30</span>
+            </button>
+            <button class="tool-btn" onclick="selectTool('bulldoze')">
+                <span>Demolish</span>
+                <span class="tool-cost">$5</span>
+            </button>
+        </div>
+    </footer>
+</body>
+<script src="script.js"></script>
+</html>
