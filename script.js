@@ -98,4 +98,37 @@ function selectTool(toolName) {
 function handleTileClick(x, y) {
     const tileData = state.grid[y][x];
     const tileDiv = document.querySelector(`.tile[data-x="${x}"][data-y="${y}"]`);
+    const tool = BUILDINGS[state.selectedTool];
+    if (state.selectedTool === 'select') {
+        showMessage(`Inspect: ${tileData.type.toUpperCase()} at ${x},${y}`);
+        return;
+    }
+    if (tileData.type === 'water') {
+        showMessage('You cannot build on water');
+        return;
+    }
+    if (state.selectedTool === 'bulldoze') {
+        if (tileData.type === 'grass') return;
+        if (state.money >= tool.cost) {
+            state.money -= tool.cost;
+            if (tileData.type === 'house') state.popCap -= BUILDINGS.house.popCap;
+            tileData.type = 'grass';
+            tileDiv.className = 'tile';
+            updateUI();
+            showMessage("Demolished!");
+        } else {
+            showMessage("Not enough money")
+        }
+        return;
+    }
+    if (tileData.type !== 'grass') {
+        showMessage("Space already occupied!");
+        return;
+    }
+    if (state.money >= tool.cost && state.wood >= tool.wood) {
+        state.money -= tool.cost;
+        state.wood -= tool.wood;
+        tileData.type = tool.type;
+        if (tool.type === 'house') state.popCap += tool.popCap;
+    }
 }
