@@ -171,8 +171,8 @@ function startGameLoop() {
 function updateUI() {
     document.getElementById('stat-money').innerText = `$${state.money}`;
     document.getElementById('stat-wood').innerText = state.wood;
-    document.getElementById('stat-pop').innerText = state.population;
-    document.getElementById('stat-pop-cap').innerText = state.popCap;
+    document.getElementById('stat-population').innerText = state.population;
+    document.getElementById('stat-population-cap').innerText = state.popCap;
     document.getElementById('stat-day').innerText = state.day;
 }
 function showMessage(message) {
