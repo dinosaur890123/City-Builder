@@ -1,0 +1,33 @@
+body {
+    font-family: Calibri;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: #f0f0f0;
+}
+header {
+    background-color: #cac2c2;
+    padding: 10px;
+    display: flex;
+    justify-content: space-around;
+    border-bottom: 2px solid #191919;
+}
+.stat-box {
+    font-weight: bold;
+}
+#game-container {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items:  center;
+    background-color: #9f9c9c;
+    overflow: auto;
+    position: relative;
+}
+#city-grid {
+    display: grid;
+    gap: 1px;
+    background-color: #000000;
+    border: 2px solid #000000;
+}

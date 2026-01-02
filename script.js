@@ -13,7 +13,7 @@ const buildings = {
         wood: 10,
         type: 'house',
         name: 'House',
-        popCap: 5
+        populationCap: 5
     },
     commercial: {
         cost: 100,
@@ -111,7 +111,7 @@ function handleTileClick(x, y) {
         if (tileData.type === 'grass') return;
         if (state.money >= tool.cost) {
             state.money -= tool.cost;
-            if (tileData.type === 'house') state.popCap -= BUILDINGS.house.popCap;
+            if (tileData.type === 'house') state.populationCap -= BUILDINGS.house.populationCap;
             tileData.type = 'grass';
             tileDiv.className = 'tile';
             updateUI();
@@ -129,6 +129,59 @@ function handleTileClick(x, y) {
         state.money -= tool.cost;
         state.wood -= tool.wood;
         tileData.type = tool.type;
-        if (tool.type === 'house') state.popCap += tool.popCap;
+        if (tool.type === 'house') state.populationCap += tool.populationCap;
+        tileDiv.classList.add(tool.type);
+        updateUI();
+    } else {
+        showMessage("Not enough resources!");
     }
 }
+function startGameLoop() {
+    setInterval(() => {
+        state.day++;
+        let dailyIncome = 0;
+        let dailyWood = 0;
+        let houses = 0;
+        for (let y=0; y<GRID_HEIGHT; y++) {
+            for (let x=0; x<GRID_WIDTH; x++) {
+                const cell = state.grid[y][x];
+                if (cell.type === 'house') house++;
+                if (cell.type === 'commercial') {
+                    dailyIncome += 5 + Math.floor(state.population / 2);
+                }
+                if (cell.type === 'industry') {
+                    dailyWood += BUILDINGS.industry.woodGen;
+                }
+            }
+        }
+        if (state.population < state.populationCap) {
+            const growth = Math.ceil((state.popCap - state.population) / 4);
+            state.population += growth;
+        } else {
+            state.population = state.populationCap;
+        }
+        state.money += dailyIncome;
+        state.wood += dailyWood;
+        updateUI();
+        if (state.day % 10 === 0 && state.population > 0) {
+            showMessage(`Day ${state.day}: Taxes collected.`);
+        }
+    }, TICK_RATE)
+}
+function updateUI() {
+    document.getElementById('stat-money').innerText = `$${state.money}`;
+    document.getElementById('stat-wood').innerText = state.wood;
+    document.getElementById('stat-pop').innerText = state.population;
+    document.getElementById('stat-pop-cap').innerText = state.popCap;
+    document.getElementById('stat-day').innerText = state.day;
+}
+function showMessage(message) {
+    const log = document.getElementById('message-log');
+    log.innerText = message;
+    log.style.opacity = 1;
+    if (window.messageTimeout) clearTimeout(window.messageTimeout);
+    window.messageTimeout = setTimeout(() => {
+        log.style.opacity = 0;
+    }, 2500);
+}
+window.onload = init;
