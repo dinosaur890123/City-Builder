@@ -1,7 +1,7 @@
 const GRID_WIDTH = 20;
 const GRID_HEIGHT = 15;
 const TICK_RATE = 1000;
-const buildings = {
+const BUILDINGS = {
     road: {
         cost: 10,
         wood: 0,
@@ -142,8 +142,8 @@ function startGameLoop() {
         let dailyIncome = 0;
         let dailyWood = 0;
         let houses = 0;
-        for (let y=0; y<GRID_HEIGHT; y++) {
-            for (let x=0; x<GRID_WIDTH; x++) {
+        for (let y=0; y < GRID_HEIGHT; y++) {
+            for (let x=0; x < GRID_WIDTH; x++) {
                 const cell = state.grid[y][x];
                 if (cell.type === 'house') house++;
                 if (cell.type === 'commercial') {
@@ -155,7 +155,7 @@ function startGameLoop() {
             }
         }
         if (state.population < state.populationCap) {
-            const growth = Math.ceil((state.popCap - state.population) / 4);
+            const growth = Math.ceil((state.populationCap - state.population) / 4);
             state.population += growth;
         } else {
             state.population = state.populationCap;
@@ -172,7 +172,7 @@ function updateUI() {
     document.getElementById('stat-money').innerText = `$${state.money}`;
     document.getElementById('stat-wood').innerText = state.wood;
     document.getElementById('stat-population').innerText = state.population;
-    document.getElementById('stat-population-cap').innerText = state.popCap;
+    document.getElementById('stat-population-cap').innerText = state.populationCap;
     document.getElementById('stat-day').innerText = state.day;
 }
 function showMessage(message) {
