@@ -8,12 +8,29 @@ const BUILDINGS = {
         type: 'road',
         name: 'Road'
     },
-    house: {
+    house1: {
         cost: 50,
         wood: 10,
+        stone: 0,
         type: 'house',
         name: 'House',
         populationCap: 5
+    },
+    house2: {
+        cost: 150,
+        wood: 30,
+        stone: 10,
+        type: 'house2',
+        name: 'House II',
+        populationCap: 12
+    },
+    house3: {
+        cost: 400,
+        wood: 100,
+        stone: 40,
+        type: 'house3',
+        name: 'House III',
+        populationCap: 30
     },
     commercial: {
         cost: 100,
@@ -127,7 +144,9 @@ function handleTileClick(x, y) {
         if (tileData.type === 'grass') return;
         if (state.money >= tool.cost) {
             state.money -= tool.cost;
-            if (tileData.type === 'house') state.populationCap -= BUILDINGS.house.populationCap;
+            if (BUILDINGS[tileData.type] && BUILDINGS[tileData.type].populationCap) {
+                state.populationCap -= BUILDINGS[tileData.type].populationCap;
+            }
             tileData.type = 'grass';
             tileDiv.className = 'tile';
             updateUI();
@@ -137,6 +156,11 @@ function handleTileClick(x, y) {
         }
         return;
     }
+    let isUpgrade = false;
+    let upgradeCost = tool.cost;
+    if (tileData.type === 'house1' && tool.type === 'house2') isUpgrade = true;
+    if (tileData.type === 'house1' && tool.type === 'house3') isUpgrade = true;
+    if (tileData.type === 'house2' && tool.type === 'house3') isUpgrade = true;
     if (tileData.type !== 'grass') {
         showMessage("Space already occupied!");
         return;
@@ -148,6 +172,12 @@ function handleTileClick(x, y) {
         state.money -= tool.cost;
         state.wood -= (tool.wood || 0);
         state.stone -= (tool.stone || 0);
+        if (isUpgrade) {
+            tileDiv.classList.remove(tileData.type);
+            if (BUILDINGS[tileData.type].populationCap) {
+                state.populationCap -= BUILDINGS[tileData.type].populationCap;
+            }
+        }
         tileData.type = tool.type;
         if (tool.type === 'house') state.populationCap += tool.populationCap;
         tileDiv.classList.add(tool.type);

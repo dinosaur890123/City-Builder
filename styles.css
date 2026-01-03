@@ -46,8 +46,14 @@ header {
 .tile.road {
     background-color: #555555;
 }
-.tile.house {
+.tile.house1 {
     background-color: #d55555;
+}
+.tile.house2 {
+    background-color: #a53030;
+}
+.tile.house3 {
+    background-color: #601010;
 }
 .tile.commercial {
     background-color: rgb(72, 72, 216);
