@@ -29,6 +29,22 @@ const BUILDINGS = {
         name: 'Lumber Mill',
         woodGen: 5
     },
+    quarry: {
+        cost: 200,
+        wood: 20,
+        stone: 0,
+        type: 'quarry',
+        name: 'Quarry',
+        stoneGen: 3
+    },
+    factory: {
+        cost: 400,
+        wood: 50,
+        stone: 20,
+        type: 'factory',
+        name: 'Factory',
+        income: 50
+    },
     park: {
         cost: 30,
         wood: 0,
@@ -125,6 +141,24 @@ function handleTileClick(x, y) {
         showMessage("Space already occupied!");
         return;
     }
+    const hasMoney = state.money >= tool.cost;
+    const hasWood = state.wood >= (tool.wood || 0);
+    const hasStone = state.stone >= (tool.stone || 0);
+    if (hasMoney && hasWood && hasStone) {
+        state.money -= tool.cost;
+        state.wood -= (tool.wood || 0);
+        state.stone -= (tool.stone || 0);
+        tileData.type = tool.type;
+        if (tool.type === 'house') state.populationCap += tool.populationCap;
+        tileDiv.classList.add(tool.type);
+        updateUI();
+    } else {
+        let missing = [];
+        if (!hasMoney) missing.push("Money");
+        if (!hasWood) missing.push("Wood");
+        if (!hasStone) missing.push("Stone");
+        showMessage(`Need more: ${missing.join(', ')}`);
+    }
     if (state.money >= tool.cost && state.wood >= tool.wood) {
         state.money -= tool.cost;
         state.wood -= tool.wood;
@@ -141,16 +175,23 @@ function startGameLoop() {
         state.day++;
         let dailyIncome = 0;
         let dailyWood = 0;
+        let dailyStone = 0;
         let houses = 0;
         for (let y=0; y < GRID_HEIGHT; y++) {
             for (let x=0; x < GRID_WIDTH; x++) {
                 const cell = state.grid[y][x];
-                if (cell.type === 'house') house++;
+                if (cell.type === 'house') houses++;
                 if (cell.type === 'commercial') {
                     dailyIncome += 5 + Math.floor(state.population / 2);
                 }
                 if (cell.type === 'industry') {
                     dailyWood += BUILDINGS.industry.woodGen;
+                }
+                if (cell.type === 'quarry') {
+                    dailyStone += BUILDINGS.quarry.stoneGen;
+                }
+                if (cell.type === 'factory') {
+                    dailyIncome += BUILDINGS.factory.income;
                 }
             }
         }

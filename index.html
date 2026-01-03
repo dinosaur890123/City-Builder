@@ -17,6 +17,10 @@
             <span id="stat-wood">50</span>
         </div>
         <div class="stat-box">
+            <span>Stone: </span>
+            <span id="stat-stone">0</span>
+        </div>
+        <div class="stat-box">
             <span>Population: </span>
             <span id="stat-population">0</span> 
             <span> / </span>
@@ -54,11 +58,19 @@
                 <span>Mill</span>
                 <span class="tool-cost"></span>
             </button>
-            <button class="tool-btn" onclick="selectTool('park')">
+            <button class="tool-button" onclick="selectTool('quarry')">
+                <span>Quarry</span>
+                <span class="tool-cost">$200, 20W</span>
+            </button>
+            <button class="tool-button" onclick="selectTool('factory')">
+                <span>Factory</span>
+                <span class="tool-cost">$400, 50W, 20S</span>
+            </button>
+            <button class="tool-button" onclick="selectTool('park')">
                 <span>Park</span>
                 <span class="tool-cost">$30</span>
             </button>
-            <button class="tool-btn" onclick="selectTool('bulldoze')">
+            <button class="tool-button" onclick="selectTool('bulldoze')">
                 <span>Demolish</span>
                 <span class="tool-cost">$5</span>
             </button>

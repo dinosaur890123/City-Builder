@@ -43,26 +43,26 @@ header {
     outline: 2px solid white;
     z-index: 10;
 }
-.tile-road {
+.tile.road {
     background-color: #555555;
 }
-.tile-house {
+.tile.house {
     background-color: #d55555;
 }
-.tile-commercial {
+.tile.commercial {
     background-color: rgb(72, 72, 216);
 }
-.tile-industry {
+.tile.industry {
     background-color: rgb(211, 211, 71);
 }
-.tile-park {
+.tile.park {
     background-color: rgb(31, 121, 31);
 }
-.tile-water {
+.tile.water {
     background-color: rgb(73, 73, 229);
     cursor: not-allowed;
 }
-.tile-house::after {
+.tile.house::after {
     content: 'H';
     position: absolute;
     width: 100%;
@@ -71,7 +71,7 @@ header {
     color: white;
     font-weight: bold;
 }
-.tile-commercial::after {
+.tile.commercial::after {
     content: 'M';
     position: absolute;
     width: 100%;
@@ -80,7 +80,7 @@ header {
     color: white;
     font-weight: bold;
 }
-.tile-industry::after {
+.tile.industry::after {
     content: 'I';
     position: absolute;
     width: 100%;
@@ -89,7 +89,7 @@ header {
     color: black;
     font-weight: bold;
 }
-.tile-park::after {
+.tile.park::after {
     content: 'P';
     position: absolute;
     width: 100%;
@@ -120,7 +120,7 @@ footer {
 .tool-button:hover {
     background-color: #dddddd;
 }
-.tool-button:active {
+.tool-button.active {
     background-color: #a39d9d;
     font-weight: bold;
     border: 2px solid #000000;
