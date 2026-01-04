@@ -88,22 +88,39 @@ let state = {
     populationCap: 0,
     day: 1,
     selectedTool: 'select',
-    grid: []
+    grid: [],
+    agents: [],
+    employedCount: 0
 };
-
+let ctx;
 function init() {
     createGrid();
     updateUI();
     startGameLoop();
+    requestAnimationFrame(renderLoop);
     showMessage("Welcome! Start by building a Road and a House.");
+}
+function setupCanvas() {
+    const canvas = document.getElementById('agent-layer');
+    const totalWidth = (GRID_WIDTH * TILE_SIZE) + ((GRID_WIDTH - 1) * TILE_GAP);
+    const totalHeight = (GRID_HEIGHT * TILE_SIZE) + ((GRID_HEIGHT - 1) * TILE_GAP);
+    canvas.width = totalWidth;
+    canvas.height = totalHeight;
+    ctx = canvas.getContext('2d');
 }
 function createGrid() {
     const gridElement = document.getElementById('city-grid');
-    gridElement.style.gridTemplateColumns = `repeat(${GRID_WIDTH}, 40px)`;
+    gridElement.style.gridTemplateColumns = `repeat(${GRID_WIDTH}, ${TILE_SIZE}px)`;
+    gridElement.style.gap = `${TILE_GAP}px`;
     for (let y = 0; y < GRID_HEIGHT; y++) {
         let row = [];
         for (let x = 0; x < GRID_WIDTH; x++) {
-            row.push({type: 'grass', x, y});
+            let tile = {
+                type: 'grass', 
+                x, y, 
+                workers: 0, 
+                maxWorkers: 0
+            };
             const tileDiv = document.createElement('div');
             tileDiv.classList.add('tile');
             tileDiv.dataset.x = x;
@@ -114,6 +131,7 @@ function createGrid() {
                 tileDiv.classList.add('water');
             }
             gridElement.appendChild(tileDiv);
+            row.push(tile);
         }
         state.grid.push(row);
     }
@@ -146,9 +164,13 @@ function handleTileClick(x, y) {
             state.money -= tool.cost;
             if (BUILDINGS[tileData.type] && BUILDINGS[tileData.type].populationCap) {
                 state.populationCap -= BUILDINGS[tileData.type].populationCap;
+                state.agents = state.agents.filter(a => !(a.homeX === x && a.homeY === y));
             }
+            tileDiv.classList.remove(tileData.type);
             tileData.type = 'grass';
-            tileDiv.className = 'tile';
+            tileData.maxWorkers = 0;
+            tileData.workers = 0;
+            recalculateJobs();
             updateUI();
             showMessage("Demolished!");
         } else {
@@ -157,11 +179,12 @@ function handleTileClick(x, y) {
         return;
     }
     let isUpgrade = false;
-    let upgradeCost = tool.cost;
-    if (tileData.type === 'house1' && tool.type === 'house2') isUpgrade = true;
-    if (tileData.type === 'house1' && tool.type === 'house3') isUpgrade = true;
-    if (tileData.type === 'house2' && tool.type === 'house3') isUpgrade = true;
-    if (tileData.type !== 'grass') {
+    if ((tileData.type === 'house1' && tool.type === 'house2') ||
+        (tileData.type === 'house1' && tool.type === 'house3') ||
+        (tileData.type === 'house2' && tool.type === 'house3')) {
+        isUpgrade = true;
+    }
+    if (tileData.type !== 'grass' && !isUpgrade) {
         showMessage("Space already occupied!");
         return;
     }
@@ -181,6 +204,12 @@ function handleTileClick(x, y) {
         tileData.type = tool.type;
         if (tool.type === 'house') state.populationCap += tool.populationCap;
         tileDiv.classList.add(tool.type);
+        if (tool.populationCap) state.populationCap += tool.populationCap;
+        if (tool.jobs) {
+            tileData.maxWorkers = tool.jobs;
+            tileData.workers = 0;
+        }
+        recalculateJobs();
         updateUI();
     } else {
         let missing = [];
@@ -188,16 +217,6 @@ function handleTileClick(x, y) {
         if (!hasWood) missing.push("Wood");
         if (!hasStone) missing.push("Stone");
         showMessage(`Need more: ${missing.join(', ')}`);
-    }
-    if (state.money >= tool.cost && state.wood >= tool.wood) {
-        state.money -= tool.cost;
-        state.wood -= tool.wood;
-        tileData.type = tool.type;
-        if (tool.type === 'house') state.populationCap += tool.populationCap;
-        tileDiv.classList.add(tool.type);
-        updateUI();
-    } else {
-        showMessage("Not enough resources!");
     }
 }
 function startGameLoop() {
