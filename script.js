@@ -219,50 +219,214 @@ function handleTileClick(x, y) {
         showMessage(`Need more: ${missing.join(', ')}`);
     }
 }
+function findPath(startX, startY, endX, endY) {
+    let startNodes = getAdjacentRoads(startX, startY);
+    let endNodes = getAdjacentRoads(endX, endY);
+    if (startNodes.length === 0 || endNodes.length === 0) return null;
+    let queue = [];
+    let visited = new Set();
+    let parents = {};
+    for (let node of startNodes) {
+        let key = `${node.x},${node.y}`;
+        queue.push(node);
+        visited.add(key);
+        parents[key] = null;
+    }
+
+    while (queue.length > 0) {
+        let current = queue.shift();
+        if (endNodes.some(n => n.x === current.x && n.y === current.y)) {
+            let path = [];
+            let currentKey = `${current.x},${current.y}`;
+            while (currentKey) {
+                let parts = currentKey.split(',');
+                path.unshift({x: parseInt(parts[0]), y: parseInt(parts[1])});
+                let p = parents[currentKey];
+                currentKey = p ? `${p.x},${p.y}` : null;
+            }
+            return path;
+        }
+        let dirs = [[0,1], [0,-1], [1,0], [-1,0]];
+        for (let d of dirs) {
+            let nx = current.x + d[0];
+            let ny = current.y + d[1];
+            let nKey = `${nx},${ny}`;
+            if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
+                if (state.grid[ny][nx].type === 'road' && !visited.has(nKey)) {
+                    visited.add(nKey);
+                    parents[nKey] = current;
+                    queue.push({x: nx, y: ny});
+                }
+            }
+        }
+    }
+    return null;
+}
+function getAdjacentRoads(cx, cy) {
+    let roads = [];
+    let dirs = [[0,1], [0,-1], [1,0], [-1,0]];
+    for (let d of dirs) {
+        let nx = cx + d[0];
+        let ny = cy + d[1];
+        if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
+            if (state.grid[ny][nx].type === 'road') {
+                roads.push({x: nx, y: ny});
+            }
+        }
+    }
+    return roads;
+}
+function recalculateJobs() {
+    for (let row of state.grid) {
+        for (let tile of row) {
+            if (tile.maxWorkers > 0) tile.workers = 0;
+        }
+    }
+    state.agents.forEach(a => {
+        a.job = null;
+        a.path = [];
+    });
+    state.agents.forEach(agent => {
+        assignJobToAgent(agent);
+    });
+    countEmployed();
+}
+function assignJobToAgent() {
+    let bestDist = 9999;
+    let bestJob = null;
+    let bestPath = null;
+    for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
+            let tile = state.grid[y][x];
+            if (tile.maxWorkers > 0 && tile.workers < tile.maxWorkers) {
+                let dist = Math.abs(agent.homeX - x) + Math.abs(agent.homeY - y);
+                if (dist < bestDist) {
+                    let path = findPath(agent.homeX, agent.homeY, x, y);
+                    if (path) {
+                        bestDist = dist;
+                        bestJob = {x, y};
+                        bestPath = path;
+                    }
+                }
+            }
+        }
+    }
+    if (bestJob) {
+        agent.job = bestJob;
+        agent.path = bestPath;
+        state.grid[bestJob.y][bestJob.x].workers++;
+    }
+}
+function countEmployed() {
+    state.employedCount = state.agents.filter(a => a.job !== null).length;
+}
+function spawnAgent() {
+    let currentAgents = state.agents.length;
+    if (currentAgents < state.population) {
+        let houses = [];
+        for (let y=0; y < GRID_HEIGHT; y++) {
+            for (let x=0; x<GRID_WIDTH; x++) {
+                let t = state.grid[y][x];
+                if (t.type.startsWith('house')) houses.push({x,y});
+            }
+        }
+        if (houses.length > 0) {
+            let home = houses[Math.floor(Math.random() * houses.length)];
+            let newAgent = {
+                id: Math.random(),
+                homeX: home.x,
+                homeY: home.y,
+                x: home.x,
+                y: home.y,
+                job: null,
+                path: [],
+                pathIndex: 0,
+                progress: 0,
+                state: 'idle'
+            };
+            state.agents.push(newAgent);
+            assignJobToAgent(newAgent);
+        }
+    }
+}
 function startGameLoop() {
     setInterval(() => {
         state.day++;
+        if (state.population < state.populationCap) {
+            state.population++;
+            spawnAgents();
+            updateUI();
+        }
         let dailyIncome = 0;
         let dailyWood = 0;
         let dailyStone = 0;
         let houses = 0;
-        for (let y=0; y < GRID_HEIGHT; y++) {
-            for (let x=0; x < GRID_WIDTH; x++) {
-                const cell = state.grid[y][x];
-                if (cell.type === 'house') houses++;
-                if (cell.type === 'commercial') {
-                    dailyIncome += 5 + Math.floor(state.population / 2);
-                }
-                if (cell.type === 'industry') {
-                    dailyWood += BUILDINGS.industry.woodGen;
-                }
-                if (cell.type === 'quarry') {
-                    dailyStone += BUILDINGS.quarry.stoneGen;
-                }
-                if (cell.type === 'factory') {
-                    dailyIncome += BUILDINGS.factory.income;
+        for (let y = 0; y < GRID_HEIGHT; y++) {
+            for (let x = 0; x < GRID_WIDTH; x++) {
+                let tile = state.grid[y][x];
+                if (tile.workers > 0) {
+                    let b = BUILDINGS[tile.type];
+                    if (b.incomePerWorker) dailyIncome += (tile.workers * b.incomePerWorker);
+                    if (b.woodPerWorker) dailyWood += (tile.workers * b.woodPerWorker);
+                    if (b.stonePerWorker) dailyStone += (tile.workers * b.stonePerWorker);
                 }
             }
         }
-        if (state.population < state.populationCap) {
-            const growth = Math.ceil((state.populationCap - state.population) / 4);
-            state.population += growth;
-        } else {
-            state.population = state.populationCap;
-        }
-        state.money += dailyIncome;
-        state.wood += dailyWood;
+        state.money += Math.floor(dailyIncome);
+        state.wood += Math.floor(dailyWood);
+        state.stone += Math.floor(dailyStone);
         updateUI();
-        if (state.day % 10 === 0 && state.population > 0) {
-            showMessage(`Day ${state.day}: Taxes collected.`);
-        }
+        if (state.day % 10 === 0) showMessage(`Day ${state.day}: Income Generated`);
     }, TICK_RATE)
+}
+function renderLoop() {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    const speed = 0.05;
+    state.agents.forEach(agent => {
+        if (!agent.job || agent.path.length === 0) {
+            drawAgent(agent.homeX, agent.homeY, 'red');
+            return;
+        }
+        let targetX, targetY;
+        if (agent.pathIndex >= agent.path.length) {
+            agent.pathIndex = 0;
+            agent.x = agent.homeX;
+            agent.y = agent.homeY;
+        }
+        let targetNode = agent.path[agent.pathIndex];
+        let dx = targetNode.x - agent.x;
+        let dy = targetNode.y - agent.y;
+        let dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < speed) {
+            agent.x = targetNode.x;
+            agent.y = targetNode.y;
+            agent.pathIndex++;
+        } else {
+            agent.x += (dx / dist) * speed;
+            agent.y += (dy / dist) * speed;
+        }
+        drawAgent(agent.x, agent.y, 'yellow');
+    });
+    requestAnimationFrame(renderLoop);
+}
+function drawAgent(gridX, gridY, color) {
+    const px = gridX * (TILE_SIZE + TILE_GAP) + (TILE_SIZE / 2);
+    const py = gridY * (TILE_SIZE + TILE_GAP) + (TILE_SIZE / 2);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(px, py, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = 1;
+    ctx.stroke();
 }
 function updateUI() {
     document.getElementById('stat-money').innerText = `$${state.money}`;
     document.getElementById('stat-wood').innerText = state.wood;
+    document.getElementById('stat-stone').innerText = state.stone;
     document.getElementById('stat-population').innerText = state.population;
     document.getElementById('stat-population-cap').innerText = state.populationCap;
+    document.getElementById('stat-employed').innerText = `${state.employedCount}`;
     document.getElementById('stat-day').innerText = state.day;
 }
 function showMessage(message) {
