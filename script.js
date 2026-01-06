@@ -197,6 +197,57 @@ function applyAutomataRule(targetType, emptyType, threshold) {
             }
         }
     }
+    for (let y = 0; y < WORLD_SIZE; y++) {
+        for (let x = 0; x < WORLD_SIZE; x++) {
+            if (newGridState[y][x]) state.grid[y][x].type = newGridState[y][x];
+        }
+    }
+}
+function setupInputs() {
+    canvas.addEventListener('mousedown', e => {
+        if (e.button === 0 || e.button === 1) {
+            input.isDragging = true;
+            input.lastMouseX = e.clientX;
+            input.lastMouseY = e.clientY;
+        }
+    });
+    window.addEventListener('mouseup', () => {
+        input.isDragging = false;
+    });
+    canvas.addEventListener('mousemove', () => {
+        updateHover(e.clientX, e.clientY);
+        if (input.isDragging && (e.buttons === 4 || state.selectedTool === 'select')) {
+            const dx = (e.clientX - input.lastMouseX) / camera.zoom;
+            const dy = (e.clientY - input.lastMouseY) / camera.zoom;
+            camera.x -= dx;
+            camera.y -= dy;
+            camera.x = Math.max(0, Math.min(camera.x, WORLD_SIZE * TILE_SIZE));
+            camera.y = Math.max(0, Math.min(camera.y, WORLD_SIZE * TILE_SIZE));
+            input.lastMouseX = e.clientX;
+            input.lastMouseY = e.clientY;
+        }
+    });
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        const zoomSpeed = 0.1;
+        if (e.deltaY < 0) {
+            camera.zoom = Math.min(camera.zoom + zoomSpeed, camera.maxZoom);
+        } else {
+            camera.zoom = Math.max(camera.zoom - zoomSpeed, camera.minZoom);
+        }
+    }, {passive: false});
+    
+    canvas.addEventListener('click', e => {
+        if (input.isDragging && (Math.abs(e.clientX - input.lastMouseX) > 5)) return;
+        handleMapClick();
+    });
+}
+function updateHover(screenX, screenY) {
+    const rect = canvas.getBoundingClientRect();
+    const worldX = (screenX - rect.left - canvas.width/2) / camera.zoom + camera.x;
+    const worldY = (screenY - rect.top - canvas.height/2) / camera.zoom + camera.y;
+    input.hoverX = Math.floor(worldX / TILE_SIZE);
+    input.hoverY = Math.floor(worldY / TILE_SIZE);
 }
 function setupCanvas() {
     const canvas = document.getElementById('agent-layer');
@@ -526,33 +577,34 @@ function startGameLoop() {
     }, TICK_RATE)
 }
 function renderLoop() {
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    const speed = 0.05;
-    state.agents.forEach(agent => {
-        if (!agent.job || agent.path.length === 0) {
-            drawAgent(agent.homeX, agent.homeY, 'red');
-            return;
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const viewW = canvas.width / camera.zoom;
+    const viewH = canvas.height / camera.zoom;
+    const viewX = camera.x - viewW / 2;
+    const viewY = camera.y - viewH / 2;
+
+    const startColumn = Math.floor(Math.max(0, viewX / TILE_SIZE));
+    const endColumn = Math.floor(Math.min(WORLD_SIZE, (viewX + viewW) / TILE_SIZE + 1));
+    const startRow = Math.floor(Math.max(0, viewY / TILE_SIZE));
+    const endRow = Math.floor(Math.min(WORLD_SIZE, (viewY + viewH) / TILE_SIZE + 1));
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(camera.zoom, camera.zoom);
+    ctx.translate(-camera.x, -camera.y);
+
+    for (let y = startRow; y < endRow; y++) {
+        for (let x = startColumn; x < endColumn; x++) {
+            drawTile(state.grid[y][x]);
         }
-        let targetX, targetY;
-        if (agent.pathIndex >= agent.path.length) {
-            agent.pathIndex = 0;
-            agent.x = agent.homeX;
-            agent.y = agent.homeY;
-        }
-        let targetNode = agent.path[agent.pathIndex];
-        let dx = targetNode.x - agent.x;
-        let dy = targetNode.y - agent.y;
-        let dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist < speed) {
-            agent.x = targetNode.x;
-            agent.y = targetNode.y;
-            agent.pathIndex++;
-        } else {
-            agent.x += (dx / dist) * speed;
-            agent.y += (dy / dist) * speed;
-        }
-        drawAgent(agent.x, agent.y, 'yellow');
-    });
+    }
+    if (input.hoverX >= 0 && input.hoverX < WORLD_SIZE && input.hoverY >= 0 && input.hoverY < WORLD_SIZE) {
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(input.hoverX * TILE_SIZE, input.hoverY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    }
+    drawAgents();
+    ctx.restore();
     requestAnimationFrame(renderLoop);
 }
 function drawAgent(gridX, gridY, color) {
