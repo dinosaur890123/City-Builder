@@ -335,12 +335,9 @@ function selectTool(toolName) {
     document.querySelectorAll('.tool-button').forEach(button => button.classList.remove('active'));
     const buttons = document.querySelectorAll('.tool-button');
     for (let button of buttons) {
-        if (button.innerText.toLowerCase().includes(BUILDINGS[toolName] ? BUILDINGS[toolName].name.toLowerCase() : '')) {
-            button.classList.add('active');
-        }
-        if (toolName === 'select' && button.innerText.includes('Cursor')) {
-            button.classList.add('active');
-        }
+        if (toolName === 'select' && button.innerText.includes('Cursor')) button.classList.add('active');
+        else if (BUILDINGS[toolName] && button.innerText.includes(BUILDINGS[toolName].name)) button.classList.add('active');
+        else if (toolName === 'bulldoze' && button.innerText.includes('Bulldoze')) button.classList.add('active');
     }
 }
 function handleTileClick(x, y) {
@@ -417,6 +414,8 @@ function handleTileClick(x, y) {
     }
 }
 function findPath(startX, startY, endX, endY) {
+    const MAX_DIST = 60;
+    if (Math.abs(startX - endX) + Math.abs(startY - endY) > MAX_DIST) return null
     let startNodes = getAdjacentRoads(startX, startY);
     let endNodes = getAdjacentRoads(endX, endY);
     if (startNodes.length === 0 || endNodes.length === 0) return null;
@@ -429,8 +428,10 @@ function findPath(startX, startY, endX, endY) {
         visited.add(key);
         parents[key] = null;
     }
-
+    let iterations = 0;
     while (queue.length > 0) {
+        iterations++
+        if (iterations > 2000) return null;
         let current = queue.shift();
         if (endNodes.some(n => n.x === current.x && n.y === current.y)) {
             let path = [];
@@ -448,7 +449,7 @@ function findPath(startX, startY, endX, endY) {
             let nx = current.x + d[0];
             let ny = current.y + d[1];
             let nKey = `${nx},${ny}`;
-            if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
+            if (nx >= 0 && nx < WORLD_SIZE && ny >= 0 && ny < WORLD_SIZE) {
                 if (state.grid[ny][nx].type === 'road' && !visited.has(nKey)) {
                     visited.add(nKey);
                     parents[nKey] = current;
@@ -474,19 +475,40 @@ function getAdjacentRoads(cx, cy) {
     return roads;
 }
 function recalculateJobs() {
-    for (let row of state.grid) {
-        for (let tile of row) {
-            if (tile.maxWorkers > 0) tile.workers = 0;
+    for (let y = 0; y < WORLD_SIZE; y++) {
+        for (let x = 0; x < WORLD_SIZE; x++) {
+            if (state.grid[y][x].maxWorkers > 0) jobs.push({x,y, tile: state.grid[y][x]});
         }
     }
     state.agents.forEach(a => {
-        a.job = null;
-        a.path = [];
+        let bestDist = 9999;
+        let bestJob = null;
+        let bestPath = null;
+        jobs.sort((a,b) => {
+            let distA = Math.abs(agent.homeX - a.x) + Math.abs(agent.homeY - a.y);
+            let distB = Math.abs(agent.homeX - b.x) + Math.abs(agent.homeY - b.y);
+            return distA - distB;
+        });
+        let tries = 0;
+        for (let job of jobs) {
+            if (tries > 5) break;
+            if (job.tile.workers < job.tile.maxWorkers) {
+                let path = findPath(agent.homeX, agent.homeY, job.x, job.y);
+                if (path) {
+                    bestJob = job;
+                    bestPath = path;
+                    break;
+                }
+                tries++;
+            }
+        }
+        if (bestJob) {
+            agent.job = {x: bestJob.x, y: bestJob.y};
+            agent.path = bestPath;
+            bestJob.tile.workers++;
+        }
     });
-    state.agents.forEach(agent => {
-        assignJobToAgent(agent);
-    });
-    countEmployed();
+    state.employedCount = state.agents.filter(a => a.job).length;
 }
 function assignJobToAgent() {
     let bestDist = 9999;
@@ -518,13 +540,11 @@ function countEmployed() {
     state.employedCount = state.agents.filter(a => a.job !== null).length;
 }
 function spawnAgents() {
-    let currentAgents = state.agents.length;
-    if (currentAgents < state.population) {
+    if (state.agents.length < state.population) {
         let houses = [];
         for (let y=0; y < GRID_HEIGHT; y++) {
-            for (let x=0; x<GRID_WIDTH; x++) {
-                let t = state.grid[y][x];
-                if (t.type.startsWith('house')) houses.push({x,y});
+            for (let x = 0; x < WORLD_SIZE; x++) {
+                if (state.grid[y][x].type.startsWith('house')) houses.push({x,y});
             }
         }
         if (houses.length > 0) {
@@ -605,18 +625,115 @@ function renderLoop() {
     }
     drawAgents();
     ctx.restore();
+    document.getElementById('debug-info').innerText = `Pos: ${Math.floor(camera.x)},${Math.floor(camera.y)} | Zoom: ${camera.zoom.toFixed(2)}`;
     requestAnimationFrame(renderLoop);
 }
-function drawAgent(gridX, gridY, color) {
-    const px = gridX * (TILE_SIZE + TILE_GAP) + (TILE_SIZE / 2);
-    const py = gridY * (TILE_SIZE + TILE_GAP) + (TILE_SIZE / 2);
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(px, py, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'black';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+function drawAgents() {
+    const speed = 0.05;
+    state.agents.forEach(agent => {
+        if (!agent.job || agent.path.length === 0) return;
+        if (agent.pathIndex >= agent.path.length) {
+            agent.pathIndex = 0;
+            agent.x = agent.homeX;
+            agent.y = agent.homeY;
+        }
+        let target = agent.path[agent.pathIndex];
+        let dx = target.x - agent.x;
+        let dy = target.y - agent.y;
+        let dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < speed) {
+            agent.x = target.x;
+            agent.y = target.y;
+            agent.pathIndex++;
+        } else {
+            agent.x += (dx/dist) * speed;
+            agent.y += (dy/dist) * speed;
+        }
+        const screenX = agent.x * TILE_SIZE + TILE_SIZE / 2;
+        const screenY = agent.y * TILE_SIZE + TILE_SIZE / 2;
+        ctx.fillStyle = '#f1c40f';
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, TILE_SIZE / 6, 0, Math.PI * 2);
+        ctx.fill();
+    });
+}
+function drawMinimap() {
+    minimapCanvas.width = WORLD_SIZE;
+    minimapCanvas.height = WORLD_SIZE;
+    const mCtx = minimapCtx;
+    const id = mCtx.createImageData(WORLD_SIZE, WORLD_SIZE);
+    const d = id.data;
+    for (let i = 0; i < state.grid.length * WORLD_SIZE; i++) {
+        const y = Math.floor(i / WORLD_SIZE);
+        const x = i % WORLD_SIZE;
+        const tile = state.grid[y][x];
+        let r = 0, g = 0, b = 0;
+        if (tile.type === 'grass') {r = 46; g = 204; b = 113;}
+        else if (tile.type === 'water') { r= 52; g = 152; b = 219;}
+        else if (tile.type === 'forest') {r = 39; g = 174; b = 96;}
+        else if (tile.type === 'road') {r = 100; g = 100; b = 100;}
+        else if (tile.type.startsWith('house')) {r = 231; g = 76; b = 60;}
+        else {r = 200; g = 200; b = 200;}
+
+        d[i*4] = r;
+        d[i*4+1] = g;
+        d[i*4+2] = b;
+        d[i*4+3] = 255;
+    }
+    mCtx.putImageData(id, 0, 0);
+}
+function handleMapClick() {
+    const x = input.hoverX;
+    const y = input.hoverY;
+    if (x < 0 || x >= WORLD_SIZE || y < 0 || y >= WORLD_SIZE) return;
+    const tileData = state.grid[y][x];
+    const tool = BUILDINGS[state.selectedTool];
+    if (state.selectedTool === 'select') {
+        showMessage(`Inspect: ${tileData.type.toUpperCase()} at ${x},${y} (Workers: ${tileData.workers}/${tileData.maxWorkers})`);
+        return;
+    }
+    
+    if (state.selectedTool === 'bulldoze') {
+        if (tileData.type === 'grass' || tileData.type === 'water') return;
+        if (state.money >= tool.cost) {
+            state.money -= tool.cost;
+            if (BUILDINGS[tileData.type].populationCap) {
+                state.populationCap -= BUILDINGS[tileData.type].popCap;
+                state.agents = state.agents.filter(a => !(a.homeX === x && a.homeY === y));
+            }
+            tileData.type = 'grass';
+            tileData.workers = 0;
+            tileData.maxWorkers = 0;
+            updateUI();
+            drawMinimap();
+            recalculateJobs();
+        }
+        return;
+    }
+    if (tileData.type !== 'grass') {
+        showMessage("Cannot build here!");
+        return;
+    }
+    const hasMoney = state.money >= tool.cost;
+    const hasWood = state.wood >= (tool.wood || 0);
+    const hasStone = state.stone >= (tool.stone || 0);
+    if (hasMoney && hasWood && hasStone) {
+        state.money -= tool.cost;
+        state.wood -= (tool.wood || 0);
+        state.stone -= (tool.stone || 0);
+        tileData.type = tool.type;
+        if (tool.popCap) state.populationCap += tool.popCap;
+        if (tool.jobs) {
+            tileData.maxWorkers = tool.jobs;
+            tileData.workers = 0;
+        }
+        updateUI();
+        drawMinimap();
+        recalculateJobs();
+    } else {
+        showMessage("Not enough resources");
+    }
 }
 function updateUI() {
     document.getElementById('stat-money').innerText = `$${state.money}`;
