@@ -5,16 +5,19 @@ const BUILDINGS = {
     road: {
         cost: 10,
         wood: 0,
+        stone: 0,
         type: 'road',
-        name: 'Road'
+        name: 'Road',
+        color: '#555555'
     },
     house1: {
         cost: 50,
         wood: 10,
         stone: 0,
-        type: 'house',
-        name: 'House',
-        populationCap: 5
+        type: 'house1',
+        name: 'House I',
+        popCap: 5,
+        color: '#e74c3c'
     },
     house2: {
         cost: 150,
@@ -22,7 +25,8 @@ const BUILDINGS = {
         stone: 10,
         type: 'house2',
         name: 'House II',
-        populationCap: 12
+        popCap: 12,
+        color: '#c0392b'
     },
     house3: {
         cost: 400,
@@ -30,21 +34,28 @@ const BUILDINGS = {
         stone: 40,
         type: 'house3',
         name: 'House III',
-        populationCap: 30
+        popCap: 30,
+        color: '#922b21'
     },
     commercial: {
         cost: 100,
         wood: 20,
+        stone: 0,
         type: 'commercial',
         name: 'Market',
-        income: 10
+        jobs: 4,
+        incomePerWorker: 3,
+        color: '#3498db'
     },
     industry: {
         cost: 150,
         wood: 0,
+        stone: 0,
         type: 'industry',
         name: 'Lumber Mill',
-        woodGen: 5
+        jobs: 5,
+        woodPerWorker: 1.5,
+        color: '#f1c40f'
     },
     quarry: {
         cost: 200,
@@ -52,7 +63,9 @@ const BUILDINGS = {
         stone: 0,
         type: 'quarry',
         name: 'Quarry',
-        stoneGen: 3
+        jobs: 5,
+        stonePerWorker: 1,
+        color: '#95a5a6'
     },
     factory: {
         cost: 400,
@@ -60,25 +73,33 @@ const BUILDINGS = {
         stone: 20,
         type: 'factory',
         name: 'Factory',
-        income: 50
+        jobs: 10,
+        incomePerWorker: 8,
+        color: '#e67e22'
     },
     park: {
         cost: 30,
         wood: 0,
+        stone: 0,
         type: 'park',
-        name: 'Small Park'
+        name: 'Small Park',
+        color: '#27ae60'
     },
     bulldoze: {
         cost: 5,
         wood: 0,
+        stone: 0,
         type: 'bulldoze',
-        name: 'Bulldozer'
+        name: 'Bulldozer',
+        color: 'red'
     },
     select: {
         cost: 0,
         wood: 0,
+        stone: 0,
         type: 'select',
-        name: 'Cursor'
+        name: 'Cursor',
+        color: 'white'
     }
 };
 const TERRAIN_COLORS = {
@@ -361,8 +382,8 @@ function handleTileClick(x, y) {
         if (tileData.type === 'grass') return;
         if (state.money >= tool.cost) {
             state.money -= tool.cost;
-            if (BUILDINGS[tileData.type] && BUILDINGS[tileData.type].populationCap) {
-                state.populationCap -= BUILDINGS[tileData.type].populationCap;
+            if (BUILDINGS[tileData.type] && BUILDINGS[tileData.type].popCap) {
+                state.populationCap -= BUILDINGS[tileData.type].popCap;
                 state.agents = state.agents.filter(a => !(a.homeX === x && a.homeY === y));
             }
             tileDiv.classList.remove(tileData.type);
@@ -396,14 +417,13 @@ function handleTileClick(x, y) {
         state.stone -= (tool.stone || 0);
         if (isUpgrade) {
             tileDiv.classList.remove(tileData.type);
-            if (BUILDINGS[tileData.type].populationCap) {
-                state.populationCap -= BUILDINGS[tileData.type].populationCap;
+            if (BUILDINGS[tileData.type].popCap) {
+                state.populationCap -= BUILDINGS[tileData.type].popCap;
             }
         }
         tileData.type = tool.type;
-        if (tool.type === 'house') state.populationCap += tool.populationCap;
         tileDiv.classList.add(tool.type);
-        if (tool.populationCap) state.populationCap += tool.populationCap;
+        if (tool.popCap) state.populationCap += tool.popCap;
         if (tool.jobs) {
             tileData.maxWorkers = tool.jobs;
             tileData.workers = 0;
@@ -707,7 +727,7 @@ function handleMapClick() {
         if (tileData.type === 'grass' || tileData.type === 'water') return;
         if (state.money >= tool.cost) {
             state.money -= tool.cost;
-            if (BUILDINGS[tileData.type].populationCap) {
+            if (BUILDINGS[tileData.type].popCap) {
                 state.populationCap -= BUILDINGS[tileData.type].popCap;
                 state.agents = state.agents.filter(a => !(a.homeX === x && a.homeY === y));
             }
