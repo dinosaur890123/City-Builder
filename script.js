@@ -137,6 +137,12 @@ let input = {
 };
 let canvas, ctx;
 let minimapCanvas, minimapCtx;
+const tutorialSteps = [
+    {id: 'intro', text: 'Welcome to City Builder! Drag to pan and scroll to zoom.', autoAdvance: 3500},
+    {id: 'road', text: 'Select the Road tool and place one Road tile', event: 'build:road'},
+    {id: 'house', text: 'Great! Now place a House I next to your road', event: 'build:house1'},
+
+]
 function init() {
     canvas = document.getElementById('game-canvas');
     ctx = canvas.getContext('2d', {alpha: false});
@@ -330,25 +336,19 @@ function loadGame() {
     }
     try {
         const savedState = JSON.parse(json);
-        state = savedState;
-        const gridElement = document.getElementById('city-grid');
-        gridElement.innerHTML = '';
-        gridElement.style.gridTemplateColumns = `repeat(${GRID_WIDTH}, ${TILE_SIZE}px)`;
-        gridElement.style.gap = `${TILE_GAP}px`;
-        state.grid.forEach(row => {
-            row.forEach(tile => {
-                const tileDiv = document.createElement('div');
-                tileDiv.className = 'tile';
-                if (tile.type !== 'grass') {
-                    tileDiv.classList.add(tile.type);
-                }
-                tileDiv.dataset.x = tile.x;
-                tileDiv.dataset.y = tile.y;
-                tileDiv.onclick = () => handleTileClick(tile.x, tile.y);
-                gridElement.appendChild(tileDiv);
-            });
-        });
+        state = {
+            ...state,
+            ...savedState,
+            grid: savedState.grid || state.grid,
+            agents: (savedState.agents || []).map(agent => ({
+                ...agent,
+                path: [],
+                pathIndex: 0,
+                job: null
+            }))
+        };
         updateUI();
+        drawMinimap();
         recalculateJobs();
         showMessage("Game loaded!");
     } catch (e) {
@@ -488,9 +488,9 @@ function findPath(startX, startY, endX, endY) {
 function getAdjacentRoads(cx, cy) {
     let roads = [];
     let dirs = [[0,1], [0,-1], [1,0], [-1,0]];
-    for (let d of dirs) {
-        let nx = cx + d[0];
-        let ny = cy + d[1];
+    for (const [dx, dy] of dirs) {
+        const nx = cx + dx;
+        const ny = cy + dy;
         if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
             if (state.grid[ny][nx].type === 'road') {
                 roads.push({x: nx, y: ny});
@@ -505,9 +505,13 @@ function recalculateJobs() {
             if (state.grid[y][x].maxWorkers > 0) state.grid[y][x].workers = 0;
         }
     }
-    state.agents.forEach(a => {a.job = null; a.path = [];});
+    state.agents.forEach(agent => {
+        agent.job = null;
+        agent.path = [];
+        agent.pathIndex = 0;
+    });
 
-    let jobs = [];
+    const jobs = [];
     for (let y=0; y<WORLD_SIZE; y++) {
         for(let x=0; x<WORLD_SIZE; x++) {
             if (state.grid[y][x].maxWorkers > 0) jobs.push({x,y, tile: state.grid[y][x]});
@@ -544,19 +548,17 @@ function recalculateJobs() {
     state.employedCount = state.agents.filter(a => a.job).length;
 }
 function assignJobToAgent() {
-    let bestDist = 9999;
     let bestJob = null;
     let bestPath = null;
-    for (let y = 0; y < GRID_HEIGHT; y++) {
-        for (let x = 0; x < GRID_WIDTH; x++) {
-            let tile = state.grid[y][x];
+    for (let y = 0; y < WORLD_SIZE; y++) {
+        for (let x = 0; x < WORLD_SIZE; x++) {
+            const tile = state.grid[y][x];
             if (tile.maxWorkers > 0 && tile.workers < tile.maxWorkers) {
-                let dist = Math.abs(agent.homeX - x) + Math.abs(agent.homeY - y);
-                if (dist < bestDist) {
-                    let path = findPath(agent.homeX, agent.homeY, x, y);
+                const dist = Math.abs(agent.homeX - x) + Math.abs(agent.homeY - y);
+                if (!bestJob || dist < bestJob.dist) {
+                    const path = findPath(agent.homeX, agent.homeY, x, y);
                     if (path) {
-                        bestDist = dist;
-                        bestJob = {x, y};
+                        bestJob = {x, y, dist};
                         bestPath = path;
                     }
                 }
@@ -564,8 +566,9 @@ function assignJobToAgent() {
         }
     }
     if (bestJob) {
-        agent.job = bestJob;
+        agent.job = {x: bestJob.x, y: bestJob.y};
         agent.path = bestPath;
+        agent.pathIndex = 0;
         state.grid[bestJob.y][bestJob.x].workers++;
     }
 }
@@ -586,7 +589,8 @@ function spawnAgents() {
                 id: Math.random(),
                 homeX: home.x,
                 homeY: home.y,
-                x: home.x, y: home.y,
+                x: home.x,
+                y: home.y,
                 job: null,
                 path: [],
                 pathIndex: 0
