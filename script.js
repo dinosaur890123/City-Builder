@@ -1,6 +1,5 @@
 const WORLD_SIZE = 128;
-const TILE_SIZE = 40;
-const TILE_GAP = 1;
+const TILE_SIZE = 64;
 const TICK_RATE = 1000;
 const BUILDINGS = {
     road: {
@@ -91,6 +90,7 @@ const TERRAIN_COLORS = {
 let state = {
     money: 1000,
     wood: 50,
+    stone: 0,
     population: 0,
     populationCap: 0,
     day: 1,
@@ -126,7 +126,6 @@ function init() {
     setupInputs();
     generateWorld();
     centerCamera();
-    createGrid();
     updateUI();
     drawMinimap();
     startGameLoop();
@@ -214,7 +213,7 @@ function setupInputs() {
     window.addEventListener('mouseup', () => {
         input.isDragging = false;
     });
-    canvas.addEventListener('mousemove', () => {
+    canvas.addEventListener('mousemove', e => {
         updateHover(e.clientX, e.clientY);
         if (input.isDragging && (e.buttons === 4 || state.selectedTool === 'select')) {
             const dx = (e.clientX - input.lastMouseX) / camera.zoom;
@@ -257,33 +256,39 @@ function setupCanvas() {
     canvas.height = totalHeight;
     ctx = canvas.getContext('2d');
 }
-function createGrid() {
-    const gridElement = document.getElementById('city-grid');
-    gridElement.style.gridTemplateColumns = `repeat(${GRID_WIDTH}, ${TILE_SIZE}px)`;
-    gridElement.style.gap = `${TILE_GAP}px`;
-    if (state.grid.length > 0) return;
-    for (let y = 0; y < GRID_HEIGHT; y++) {
-        let row = [];
-        for (let x = 0; x < GRID_WIDTH; x++) {
-            let tile = {
-                type: 'grass', 
-                x, y, 
-                workers: 0, 
-                maxWorkers: 0
-            };
-            const tileDiv = document.createElement('div');
-            tileDiv.classList.add('tile');
-            tileDiv.dataset.x = x;
-            tileDiv.dataset.y = y;
-            tileDiv.onclick = () => handleTileClick(x, y);
-            if (Math.random() < 0.05) {
-                tile.type = 'water';
-                tileDiv.classList.add('water');
-            }
-            gridElement.appendChild(tileDiv);
-            row.push(tile);
-        }
-        state.grid.push(row);
+function drawTile(tile) {
+    const px = tile.x * TILE_SIZE;
+    const py = tile.y * TILE_SIZE;
+    let color = TERRAIN_COLORS[tile.type] || '#ff00ff';
+    if (BUILDINGS[tile.type]) {
+        color = BUILDINGS[tile.type].color;
+    }
+    ctx.fillStyle = color;
+    ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+    if (tile.type.startsWith('house') || tile.type === 'commercial' || tile.type === 'industry' || tile.type === 'factory') {
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        let label = '';
+        if (tile.type === 'house1') label = 'H1';
+        if (tile.type === 'house2') label = 'H2';
+        if (tile.type === 'house3') label = 'H3';
+        if (tile.type === 'commercial') label = '$';
+        if (tile.type === 'industry') label = 'W';
+        if (tile.type === 'industry') label = 'W';
+        if (tile.type === 'factory') label = 'F';
+        if (tile.type === 'quarry') label = 'Q';
+        ctx.fillText(label, px + TILE_SIZE / 2, py + TILE_SIZE / 2);
+    }
+    if (tile.type === 'forest') {
+        ctx.fillStyle = '#229954';
+        ctx.beginPath();
+        ctx.arc(px + TILE_SIZE / 2, py + TILE_SIZE / 2, TILE_SIZE / 3, 0, Math.PI * 2);
+        ctx.fill();
     }
 }
 function saveGame() {
@@ -477,6 +482,14 @@ function getAdjacentRoads(cx, cy) {
 function recalculateJobs() {
     for (let y = 0; y < WORLD_SIZE; y++) {
         for (let x = 0; x < WORLD_SIZE; x++) {
+            if (state.grid[y][x].maxWorkers > 0) state.grid[y][x].workers = 0;
+        }
+    }
+    state.agents.forEach(a => {a.job = null; a.path = [];});
+
+    let jobs = [];
+    for (let y=0; y<WORLD_SIZE; y++) {
+        for(let x=0; x<WORLD_SIZE; x++) {
             if (state.grid[y][x].maxWorkers > 0) jobs.push({x,y, tile: state.grid[y][x]});
         }
     }
@@ -553,16 +566,13 @@ function spawnAgents() {
                 id: Math.random(),
                 homeX: home.x,
                 homeY: home.y,
-                x: home.x,
-                y: home.y,
+                x: home.x, y: home.y,
                 job: null,
                 path: [],
-                pathIndex: 0,
-                progress: 0,
-                state: 'idle'
+                pathIndex: 0
             };
             state.agents.push(newAgent);
-            assignJobToAgent(newAgent);
+            recalculateJobs();
         }
     }
 }
@@ -577,9 +587,8 @@ function startGameLoop() {
         let dailyIncome = 0;
         let dailyWood = 0;
         let dailyStone = 0;
-        let houses = 0;
-        for (let y = 0; y < GRID_HEIGHT; y++) {
-            for (let x = 0; x < GRID_WIDTH; x++) {
+        for (let y = 0; y < WORLD_SIZE; y++) {
+            for (let x = 0; x < WORLD_SIZE; x++) {
                 let tile = state.grid[y][x];
                 if (tile.workers > 0) {
                     let b = BUILDINGS[tile.type];

@@ -26,12 +26,7 @@ header {
     overflow: auto;
     position: relative;
 }
-#city-grid {
-    display: grid;
-    gap: 1px;
-    background-color: #000000;
-    border: 2px solid #000000;
-}
+
 #agent-layer {
     position: absolute;
     pointer-events: none;
@@ -116,7 +111,7 @@ header {
 footer {
     background-color: #dad5d5;
     padding: 10px;
-    text-align: center;
+    z-index: 10;
     border-top: 2px solid #000000;
 }
 #controls {
@@ -124,6 +119,15 @@ footer {
     justify-content: center;
     gap: 5px;
     flex-wrap: wrap;
+}
+#debug-info {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-family: monospace;
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+    pointer-events: none;
 }
 .tool-button {
     background-color: #eae3e3;
@@ -155,4 +159,28 @@ footer {
     opacity: 0;
     transition: opacity 0.5s;
     pointer-events: none;
+}
+#minimap-container {
+    position: absolute;
+    bottom: 22px;
+    right: 22px;
+    width: 150px;
+    height: 150px;
+    background: #000;
+    border: 2px solid #555;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+#minimap {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.system-button {
+    background-color: #2980b9;
+}
+.system-button:hover {
+    background-color: #3498db;
+}
+.spacer {
+    width: 10px;
 }
