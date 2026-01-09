@@ -118,7 +118,14 @@ let state = {
     selectedTool: 'select',
     grid: [],
     agents: [],
-    employedCount: 0
+    employedCount: 0,
+    objectives: {
+        activeIndex: 0,
+        progress: {
+            build: {}
+        },
+        completed: []
+    }
 };
 let camera = {
     x: 0,
@@ -143,6 +150,38 @@ const tutorialSteps = [
     {id: 'house', text: 'Great! Now place a House I next to your road', event: 'build:house1'},
     {id: 'market', text: 'Build a Market to create jobs and income.', event: 'build:commercial'}
 ];
+const OBJECTIVES = [
+    {
+        id: 'build_roads',
+        description: 'Build 3 Roads to start your street grid.',
+        requirements: {build: {road: 3}},
+        reward: {money: 50}
+    },
+    {
+        id: 'populate_settlement',
+        description: 'Reach a population of 5 by constructing housing.',
+        requirements: {population: 5},
+        reward: {money: 100, wood: 20}
+    },
+    {
+        id: 'open_market',
+        description: 'Construct a Market to create jobs and income.',
+        requirements: {build: {commercial: 1}},
+        reward: {money: 150}
+    },
+    {
+        id: 'staff_industry',
+        description: 'Employ 5 citizens in job buildings',
+        requirements: {employed: 5},
+        reward: {money: 100, stone: 20}
+    },
+    {
+        id: 'grow_treasury',
+        description: 'Collect $2000',
+        requirements: {money: 2000},
+        reward: {wood: 40, stone: 20}
+    }
+]
 let tutorial = {active: true, stepIndex: 0};
 let tutorialTimeout = null;
 function init() {
@@ -349,6 +388,24 @@ function loadGame() {
                 job: null
             }))
         };
+        const defaultObjectives = {
+            activeIndex: 0,
+            progress: {build: {}},
+            completed: []
+        };
+        state.objectives = {
+            ...defaultObjectives,
+            ...(savedState.objectives || {}),
+            progress: {
+                build: {
+                    ...defaultObjectives.progress.build,
+                    ...(savedState.objectives?.progress?.build || {})
+                }
+            }
+        };
+        if (!savedState.objectives?.progress?.build) {
+            rebuildObjectiveBuildProgress();
+        }
         tutorial.active = false;
         if (tutorialTimeout) {
             clearTimeout(tutorialTimeout);
@@ -435,6 +492,7 @@ function handleTileClick(x, y) {
             tileData.maxWorkers = tool.jobs;
             tileData.workers = 0;
         }
+        recordBuildForObjectives(tool.type);
         recalculateJobs();
         updateUI();
     } else {
@@ -519,8 +577,8 @@ function recalculateJobs() {
     });
 
     const jobs = [];
-    for (let y=0; y<WORLD_SIZE; y++) {
-        for(let x=0; x<WORLD_SIZE; x++) {
+    for (let y = 0; y < WORLD_SIZE; y++) {
+        for (let x = 0; x < WORLD_SIZE; x++) {
             if (state.grid[y][x].maxWorkers > 0) jobs.push({x,y, tile: state.grid[y][x]});
         }
     }
@@ -553,6 +611,7 @@ function recalculateJobs() {
         }
     });
     state.employedCount = state.agents.filter(a => a.job).length;
+    checkObjectiveCompletion();
 }
 function assignJobToAgent(agent) {
     let bestJob = null;
@@ -633,6 +692,7 @@ function startGameLoop() {
         state.wood += Math.floor(dailyWood);
         state.stone += Math.floor(dailyStone);
         updateUI();
+        checkObjectiveCompletion();
         if (state.day % 10 === 0) showMessage(`Day ${state.day}: Income Generated`);
     }, TICK_RATE)
 }
@@ -768,6 +828,7 @@ function handleMapClick() {
             tileData.maxWorkers = tool.jobs;
             tileData.workers = 0;
         }
+        recordBuildForObjectives(tool.type);
         updateUI();
         drawMinimap();
         recalculateJobs();
@@ -784,6 +845,38 @@ function updateUI() {
     document.getElementById('stat-population-cap').innerText = state.populationCap;
     document.getElementById('stat-employed').innerText = `${state.employedCount}`;
     document.getElementById('stat-day').innerText = state.day;
+    updateObjectiveUI();
+}
+function recordBuildForObjectives(buildType) {
+    if (!state.objectives || !buildType) return;
+    if (!state.objectives.progress.build[buildType]) {
+        state.objectives.progress.build[buildType] = 0;
+    }
+    state.objectives.progress.build[buildType]++;
+    checkObjectiveCompletion();
+}
+function getCurrentObjective() {
+    return state.objectives ? (OBJECTIVES[state.objectives.activeIndex] || null) : null;
+}
+function isObjectiveComplete(objective) {
+    if (!objective || !objective.requirements) return true;
+    const req = objective.requirements;
+    if (req.build) {
+        for (const [type, count] of Object.entries(req.build)) {
+            if ((state.objectives.progress.build[type] || 0) < count) return false;
+        }
+    }
+    if (req.population !== undefined && state.population < req.population) return false;
+    if (req.employed !== undefined && state.employedCount < req.employed) return false;
+    if (req.money !== undefined && state.money < req.money) return false;
+    return true;
+}
+function applyObjectiveReward(reward = {}) {
+    const summary = [];
+    if (reward.money) {
+        state.money += reward.money;
+        summary.push(`+$${reward.money}`);
+    }
 }
 function showMessage(message) {
     const log = document.getElementById('message-log');
