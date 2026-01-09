@@ -141,8 +141,10 @@ const tutorialSteps = [
     {id: 'intro', text: 'Welcome to City Builder! Drag to pan and scroll to zoom.', autoAdvance: 3500},
     {id: 'road', text: 'Select the Road tool and place one Road tile', event: 'build:road'},
     {id: 'house', text: 'Great! Now place a House I next to your road', event: 'build:house1'},
-
-]
+    {id: 'market', text: 'Build a Market to create jobs and income.', event: 'build:commercial'}
+];
+let tutorial = {active: true, stepIndex: 0};
+let tutorialTimeout = null;
 function init() {
     canvas = document.getElementById('game-canvas');
     ctx = canvas.getContext('2d', {alpha: false});
@@ -157,7 +159,7 @@ function init() {
     drawMinimap();
     startGameLoop();
     requestAnimationFrame(renderLoop);
-    showMessage("Welcome! Start by building a Road and a House.");
+    startTutorial();
 }
 function resizeCanvas() {
     canvas.width = canvas.parentElement.clientWidth;
@@ -347,6 +349,11 @@ function loadGame() {
                 job: null
             }))
         };
+        tutorial.active = false;
+        if (tutorialTimeout) {
+            clearTimeout(tutorialTimeout);
+            tutorialTimeout = null;
+        }
         updateUI();
         drawMinimap();
         recalculateJobs();
@@ -491,7 +498,7 @@ function getAdjacentRoads(cx, cy) {
     for (const [dx, dy] of dirs) {
         const nx = cx + dx;
         const ny = cy + dy;
-        if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
+        if (nx >= 0 && nx < WORLD_SIZE && ny >= 0 && ny < WORLD_SIZE) {
             if (state.grid[ny][nx].type === 'road') {
                 roads.push({x: nx, y: ny});
             }
@@ -517,13 +524,12 @@ function recalculateJobs() {
             if (state.grid[y][x].maxWorkers > 0) jobs.push({x,y, tile: state.grid[y][x]});
         }
     }
-    state.agents.forEach(a => {
-        let bestDist = 9999;
+    state.agents.forEach(agent => {
         let bestJob = null;
         let bestPath = null;
-        jobs.sort((a,b) => {
-            let distA = Math.abs(agent.homeX - a.x) + Math.abs(agent.homeY - a.y);
-            let distB = Math.abs(agent.homeX - b.x) + Math.abs(agent.homeY - b.y);
+        jobs.sort((jobA, jobB) => {
+            const distA = Math.abs(agent.homeX - jobA.x) + Math.abs(agent.homeY - jobA.y);
+            const distB = Math.abs(agent.homeX - jobB.x) + Math.abs(agent.homeY - jobB.y);
             return distA - distB;
         });
         let tries = 0;
@@ -542,12 +548,13 @@ function recalculateJobs() {
         if (bestJob) {
             agent.job = {x: bestJob.x, y: bestJob.y};
             agent.path = bestPath;
+            agent.pathIndex = 0;
             bestJob.tile.workers++;
         }
     });
     state.employedCount = state.agents.filter(a => a.job).length;
 }
-function assignJobToAgent() {
+function assignJobToAgent(agent) {
     let bestJob = null;
     let bestPath = null;
     for (let y = 0; y < WORLD_SIZE; y++) {
@@ -578,7 +585,7 @@ function countEmployed() {
 function spawnAgents() {
     if (state.agents.length < state.population) {
         let houses = [];
-        for (let y=0; y < GRID_HEIGHT; y++) {
+        for (let y=0; y < WORLD_SIZE; y++) {
             for (let x = 0; x < WORLD_SIZE; x++) {
                 if (state.grid[y][x].type.startsWith('house')) houses.push({x,y});
             }
@@ -764,6 +771,7 @@ function handleMapClick() {
         updateUI();
         drawMinimap();
         recalculateJobs();
+        triggerTutorialEvent(`build:${tool.type}`);
     } else {
         showMessage("Not enough resources");
     }
@@ -785,5 +793,44 @@ function showMessage(message) {
     window.messageTimeout = setTimeout(() => {
         log.style.opacity = 0;
     }, 2500);
+}
+function startTutorial() {
+    if (!tutorial.active) return;
+    tutorial.stepIndex = 0;
+    showTutorialStep();
+}
+function showTutorialStep() {
+    if (!tutorial.active) return;
+    const step = tutorialSteps[tutorial.stepIndex];
+    if (!step) return;
+    if (tutorialTimeout) {
+        clearTimeout(tutorialTimeout);
+        tutorialTimeout = null;
+    }
+    showMessage(step.text);
+    if (step.autoAdvance) {
+        tutorialTimeout = setTimeout(() => {
+            tutorialTimeout = null;
+            advanceTutorial();
+        }, step.autoAdvance);
+    }
+}
+function advanceTutorial() {
+    if (!tutorial.active) return;
+    tutorial.stepIndex++;
+    if (tutorial.stepIndex >= tutorialSteps.length) {
+        tutorial.active = false;
+        showMessage("Tutorial complete! Keep building your city.");
+        return;
+    }
+    showTutorialStep();
+}
+function triggerTutorialEvent(eventId) {
+    if (!tutorial.active) return;
+    const step = tutorialSteps[tutorial.stepIndex];
+    if (!step || !step.event) return;
+    if (step.event === eventId) {
+        advanceTutorial();
+    }
 }
 window.onload = init;
