@@ -877,6 +877,90 @@ function applyObjectiveReward(reward = {}) {
         state.money += reward.money;
         summary.push(`+$${reward.money}`);
     }
+    if (reward.wood) {
+        state.wood += reward.wood;
+        summary.push(`+${reward.wood} Wood`); 
+    }
+    if (reward.stone) {
+        state.stone += reward.stone;
+        summary.push(`+${reward.stone} Stone`);
+    }
+    return summary.join(', ');
+}
+function getObjectiveProgressLines(objective) {
+    const lines = [];
+    if (objective.requirements?.build) {
+        for (const [type, required] of Object.entries(objective.requirements.build)) {
+            const built = state.objectives.progress.build[type] || 0;
+            const name = BUILDINGS[type]?.name || type;
+            lines.push(`${name}: ${Math.min(built, required)}/${required}`);
+        }
+    }
+    if (objective.requirements?.population !== undefined) {
+        lines.push(`Population: ${Math.min(state.population, objective.requirements.population)}/${objective.requirements.population}`);
+    }
+    if (objective.requirements?.employed !== undefined) {
+        lines.push(`Employed: ${Math.min(state.employedCount, objective.requirements.employed)}/${objective.requirements.employed}`);
+    }
+    if (objective.requirements?.money !== undefined) {
+        lines.push(`Money: $${Math.min(state.money, objective.requirements.money)}/${objective.requirements.money}`);
+    }
+    return lines;
+}
+function checkObjectiveCompletion() {
+    const completedMessages = [];
+    let objective = getCurrentObjective();
+    while (objective && isObjectiveComplete(objective)) {
+        const id = objective.id;
+        const description = objective.description;
+        if (!state.objectives.completed.includes(id)) {
+            state.objectives.completed.push(id);
+        }
+        const rewardSummary = applyObjectiveReward(objective.reward || {});
+        state.objectives.activeIndex++;
+        completedMessages.push(
+            rewardSummary ? `Objective complete: ${description} (Reward ${rewardSummary})`: `Objective complete: ${description}`
+        );
+        objective = getCurrentObjective();
+    }
+    if (completedMessages.length > 0) {
+        updateUI();
+        showMessage(completedMessages[completedMessages.length - 1]);
+    } else {
+        updateObjectiveUI();
+    }
+}
+function updateObjectiveUI() {
+    const panel = document.getElementById('objective-panel');
+    if (!panel) return;
+    const descriptionElement = document.getElementById('objective-description');
+    const progressElement = document.getElementById('objective-progress');
+    const current = getCurrentObjective();
+    if (!current) {
+        panel.classList.add('objective-complete');
+        if (descriptionElement) descriptionEl.innerText = 'All objectives complete! Keep building your city.';
+        if (progressElement) progressElement.innerHTML = '';
+        return;
+    }
+    panel.classList.remove('objective-complete');
+    if (descriptionElement) descriptionElement.innerText = current.description;
+    if (progressElement) {
+        const lines = getObjectiveProgressLines(current);
+        progressElement.innerHTML = lines.length ? lines.map(line => `<div>${line}</div>`).join('') : '<div>Complete the task to earn a reward</div>';
+    }
+}
+function rebuildObjectiveBuildProgress() {
+    if (!state.objectives) return;
+    const buildProgress = {};
+    for (let y = 0; y < WORLD_SIZE; y++) {
+        for (let x = 0; x < WORLD_SIZE; x++) {
+            const type = state.grid[y][x].type;
+            if (BUILDINGS[type] && type !== 'select' && type !== 'bulldoze') {
+                buildProgress[type] = (buildProgress[type] || 0) + 1;
+            }
+        }
+    }
+    state.objectives.progress.build = buildProgress;
 }
 function showMessage(message) {
     const log = document.getElementById('message-log');
