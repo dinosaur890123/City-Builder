@@ -144,6 +144,7 @@ let input = {
 };
 let canvas, ctx;
 let minimapCanvas, minimapCtx;
+let hasStarted = false;
 const tutorialSteps = [
     {id: 'intro', text: 'Welcome to City Builder! Drag to pan and scroll to zoom.', autoAdvance: 3500},
     {id: 'road', text: 'Select the Road tool and place one Road tile', event: 'build:road'},
@@ -1010,4 +1011,21 @@ function triggerTutorialEvent(eventId) {
         advanceTutorial();
     }
 }
+function startGame() {
+    if (hasStarted) return;
+    hasStarted = true;
+    init();
+}
+window.addEventListener('load', () => {
+    const startScreen = document.getElementById('start-screen');
+    const startButton = document.getElementById('start-game-button');
+    if (startButton && startScreen) {
+        startButton.addEventListener('click', () => {
+            startScreen.classList.add('hidden');
+            startGame();
+        });
+    } else {
+        startGame();
+    }
+})
 window.onload = init;

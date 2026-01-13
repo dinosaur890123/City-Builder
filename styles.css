@@ -216,3 +216,38 @@ footer {
 .spacer {
     width: 10px;
 }
+#start-screen {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(34, 49, 63, 0.9), rgba(30, 132, 73, 0.85));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    transition: opacity 0.4s ease;
+}
+.start-screen.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+.start-content {
+    text-align: center;
+    color: #ecf0f1;
+    padding: 2.5rem 3rem;
+     background: rgba(0, 0, 0, 0.35);
+    border-radius: 18px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+.start-content h1 {
+    margin-bottom: 0.75rem;
+    font-size: 2.5rem;
+    letter-spacing: 0.05em;
+}
+.start-content p {
+    margin-bottom: 1.5rem;
+    font-size: 1.1rem;
+}
+.start-content .tool-button {
+    padding: 0.75rem 1.75rem;
+    font-size: 1.05rem;
+}
