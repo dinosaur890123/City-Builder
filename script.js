@@ -1,3 +1,5 @@
+const { act } = require("react");
+
 const WORLD_SIZE = 128;
 const TILE_SIZE = 64;
 const TICK_RATE = 1000;
@@ -108,6 +110,8 @@ const TERRAIN_COLORS = {
     forest: '#27ae60',
     stone: '#7f8c8d'
 }
+const PERSON_ANIMATION_DURATION = 1400;
+let peopleAnimations = [];
 let state = {
     money: 1000,
     wood: 50,
@@ -488,7 +492,12 @@ function handleTileClick(x, y) {
         }
         tileData.type = tool.type;
         tileDiv.classList.add(tool.type);
-        if (tool.popCap) state.populationCap += tool.popCap;
+        if (tool.popCap) {
+            state.populationCap += tool.popCap;
+            spawnPersonAnimation(x, y, Math.min(3, Math.max(1, Math.ceil(tool.popCap / 5))));
+        } else if (tool.jobs) {
+            spawnPersonAnimation(x, y, 1);
+        }
         if (tool.jobs) {
             tileData.maxWorkers = tool.jobs;
             tileData.workers = 0;
@@ -664,6 +673,7 @@ function spawnAgents() {
             };
             state.agents.push(newAgent);
             recalculateJobs();
+            spawnPersonAnimation(home.x, home.y, 2);
         }
     }
 }
@@ -697,7 +707,7 @@ function startGameLoop() {
         if (state.day % 10 === 0) showMessage(`Day ${state.day}: Income Generated`);
     }, TICK_RATE)
 }
-function renderLoop() {
+function renderLoop(timestamp) {
     ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const viewW = canvas.width / camera.zoom;
@@ -719,6 +729,7 @@ function renderLoop() {
             drawTile(state.grid[y][x]);
         }
     }
+    updateAndRenderPersonAnimations(timestamp);
     if (input.hoverX >= 0 && input.hoverX < WORLD_SIZE && input.hoverY >= 0 && input.hoverY < WORLD_SIZE) {
         ctx.strokeStyle = 'white';
         ctx.lineWidth = 2;
@@ -824,7 +835,12 @@ function handleMapClick() {
         state.wood -= (tool.wood || 0);
         state.stone -= (tool.stone || 0);
         tileData.type = tool.type;
-        if (tool.popCap) state.populationCap += tool.popCap;
+        if (tool.popCap) {
+            state.populationCap += tool.popCap;
+            spawnPersonAnimation(x, y, Math.min(3, Math.max(1, Math.ceil(tool.popCap / 5))));
+        } else if (tool.jobs) {
+            spawnPersonAnimation(x, y, 1);
+        }
         if (tool.jobs) {
             tileData.maxWorkers = tool.jobs;
             tileData.workers = 0;
@@ -837,6 +853,53 @@ function handleMapClick() {
     } else {
         showMessage("Not enough resources");
     }
+}
+function spawnPersonAnimation(tileX, tileY, count = 1) {
+    const now = performance.now();
+    for (let i = 0; i < count; i++) {
+        peopleAnimations.push({
+            x: tileX * TILE_SIZE + TILE_SIZE / 2,
+            y: tileY * TILE_SIZE + TILE_SIZE / 2,
+            start: now + i * 80,
+            duration: PERSON_ANIMATION_DURATION,
+            radius: TILE_SIZE * (0.15 + Math.random() * 0.08),
+            lineWidth: 2 + Math.random() * 2,
+            driftX: (Math.random() - 0.5) * TILE_SIZE * 0.4,
+            driftY: -TILE_SIZE * (0.3 + Math.random() * 0.3)
+        });
+    }
+}
+function updateAndRenderPersonAnimations(timestamp) {
+    if (!peopleAnimations.length) return;
+    const now = timestamp ?? performance.now();
+    const ease = t => t * t * (3 - 2 * t);
+    const active = [];
+    for (const anim of peopleAnimations) {
+        const progress = (now - anim.start) / anim.duration;
+        if (progress <= 0) {
+            active.push(anim);
+            continue;
+        }
+        if (progress >= 1) continue;
+        const eased = ease(progress);
+        const px = anim.x + anim.driftX * eased;
+        const py = anim.y + anim.driftY * eased;
+        const pulse = anim.radius * (1 + 0.2 * Math.sin(eased * Math.PI));
+        const alpha = (1 - eased) * 0.85;
+        ctx.beginPath();
+        ctx.arc(px, py, pulse, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(241, 196, 15, ${alpha * 0.3})`;
+        ctx.fill();
+        ctx.lineWidth = anim.lineWidth;
+        ctx.strokeStyle = `rgba(241, 196, 15, ${alpha})`;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(px, py, pulse * 0.35, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(241, 196, 15, ${alpha * 0.6})`;
+        ctx.fill();
+        active.push(anim);
+    }
+    peopleAnimations = active;
 }
 function updateUI() {
     document.getElementById('stat-money').innerText = `$${state.money}`;
