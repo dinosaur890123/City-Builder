@@ -1,5 +1,17 @@
-const { act } = require("react");
-
+const DAY_LENGTH_MS = 60000;
+const LIGHTING = {
+    dawnStart: 0.18,
+    dayStart: 0.3,
+    duskStart: 0.7,
+    nightStart: 0.82
+};
+const WEATHER_TYPES = [
+    {type: 'clear', minDuration: 40000, maxDuration: 90000},
+    {type: 'rain', minDuration: 45000, maxDuration: 80000},
+    {type: 'storm', minDuration: 30000, maxDuration: 60000},
+    {type: 'snow', minDuration: 60000, maxDuration: 110000}
+];
+const WEATHER_PARTICLE_BUDGET = 180;
 const WORLD_SIZE = 128;
 const TILE_SIZE = 64;
 const TICK_RATE = 1000;
@@ -129,6 +141,13 @@ let state = {
             build: {}
         },
         completed: []
+    },
+    timeOfDay: 0,
+    weather: {
+        type: 'clear',
+        intensity: 0,
+        nextChange: 0,
+        particles: []
     }
 };
 let camera = {
@@ -146,6 +165,9 @@ let input = {
     hoverX: -1,
     hoverY: -1
 };
+let currentAmbientLight = 1;
+let nightLightingActive = false;
+let lastFrameTime = 0;
 let canvas, ctx;
 let minimapCanvas, minimapCtx;
 let hasStarted = false;
@@ -191,6 +213,8 @@ let tutorial = {active: true, stepIndex: 0};
 let tutorialTimeout = null;
 function init() {
     canvas = document.getElementById('game-canvas');
+    state.weather.nextChange = performance.now() + 45000;
+    lastFrameTime = performance.now();
     ctx = canvas.getContext('2d', {alpha: false});
     minimapCanvas = document.getElementById('minimap');
     minimapCtx = minimapCanvas.getContext('2d');
@@ -362,6 +386,17 @@ function drawTile(tile) {
         ctx.beginPath();
         ctx.arc(px + TILE_SIZE / 2, py + TILE_SIZE / 2, TILE_SIZE / 3, 0, Math.PI * 2);
         ctx.fill();
+    }
+    if (nightLightingActive && (tile.type.startsWith('house') || tile.type === 'commercial' || tile.type === 'industry' || tile.type === 'factory')) {
+        const glowAlpha = 0.35 + (1 - currentAmbientLight) * 0.5;
+        ctx.fillStyle = `rgba(255, 223, 128, ${glowAlpha})`;
+        const windowW = TILE_SIZE * 0.18;
+        const windowH = TILE_SIZE * 0.22;
+        ctx.fillRect(px + TILE_SIZE * 0.18, py + TILE_SIZE * 0.24, windowW, windowH);
+        ctx.fillRect(px + TILE_SIZE * 0.64, py + TILE_SIZE * 0.24, windowW, windowH);
+        if (BUILDINGS[tile.type]?.jobs) {
+            ctx.fillRect(px + TILE_SIZE * 0.41, py + TILE_SIZE * 0.62, windowW, windowH * 0.9);
+        }
     }
 }
 function saveGame() {
@@ -679,6 +714,9 @@ function spawnAgents() {
 }
 function startGameLoop() {
     setInterval(() => {
+        const previousDay = state.day;
+        updateTimeAndWeather(TICK_RATE);
+        const newDayStarted = state.day !== previousDay;
         state.day++;
         if (state.population < state.populationCap) {
             state.population++;
@@ -704,7 +742,7 @@ function startGameLoop() {
         state.stone += Math.floor(dailyStone);
         updateUI();
         checkObjectiveCompletion();
-        if (state.day % 10 === 0) showMessage(`Day ${state.day}: Income Generated`);
+        if (newDayStarted && state.day % 10 === 0) showMessage(`Day ${state.day}: Income Generated`);
     }, TICK_RATE)
 }
 function renderLoop(timestamp) {
@@ -719,6 +757,14 @@ function renderLoop(timestamp) {
     const endColumn = Math.floor(Math.min(WORLD_SIZE, (viewX + viewW) / TILE_SIZE + 1));
     const startRow = Math.floor(Math.max(0, viewY / TILE_SIZE));
     const endRow = Math.floor(Math.min(WORLD_SIZE, (viewY + viewH) / TILE_SIZE + 1));
+    const delta = lastFrameTime ? (timestamp - lastFrameTime) : 16;
+    lastFrameTime = timestamp;
+    updateWeatherParticles(delta);
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const ambientLight = getAmbientLightLevel();
+    currentAmbientLight = ambientLight;
+    nightLightingActive = isNightTime();
     ctx.save();
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.scale(camera.zoom, camera.zoom);
@@ -737,8 +783,112 @@ function renderLoop(timestamp) {
     }
     drawAgents();
     ctx.restore();
+    drawLightingOverlay(ambientLight);
+    drawWeatherLayer();
     document.getElementById('debug-info').innerText = `Pos: ${Math.floor(camera.x)},${Math.floor(camera.y)} | Zoom: ${camera.zoom.toFixed(2)}`;
     requestAnimationFrame(renderLoop);
+}
+function updateTimeAndWeather(deltaMs) {
+    const previousTime = state.timeOfDay;
+    state.timeOfDay = (state.timeOfDay + (deltaMs / DAY_LENGTH_MS)) % 1;
+    if (previousTime > state.timeOfDay) {
+        state.day++;
+    }
+    const now = performance.now();
+    if (now >= state.weather.nextChange) {
+        const next = WEATHER_TYPES[Math.floor(Math.random() * WEATHER_TYPES.length)];
+        state.weather.type = next.type;
+        state.weather.intensity = next.type === 'clear' ? 0 : 0.4 + Math.random() * 0.6;
+        state.weather.nextChange = now + next.minDuration + Math.random() * (next.maxDuration - next.minDuration);
+        state.weather.particles = [];
+    }
+}
+function updateWeatherParticles(deltaMs) {
+    if (!canvas) return;
+    if (state.weather.type === 'clear') {
+        state.weather.particles = [];
+        return;
+    }
+    const particles = state.weather.particles;
+    const budget = Math.floor(WEATHER_PARTICLE_BUDGET * state.weather.intensity);
+    while (particles.length < budget) {
+        particles.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            vx: state.weather.type === 'snow' ? (Math.random() * 0.04 - 0.02) : (Math.random() * 0.18 - 0.09),
+            vy: state.weather.type === 'snow' ? 0.06 + Math.random() * 0.05 : 0.25 + Math.random() * 0.2
+        });
+    }
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * deltaMs;
+        p.y += p.vy * deltaMs;
+        if (p.y > canvas.height) {
+            if (particles.length > budget) {
+                particles.splice(i, 1);
+            } else {
+                p.y = -5;
+                p.x = Math.random() * canvas.width;
+            }
+        }
+    }
+    while (particles.length > budget) particles.pop();
+}
+function getAmbientLightLevel() {
+    const base = (() => {
+        const t = state.timeOfDay;
+        if (t < LIGHTING.dawnStart) return 0.2;
+        if (t < LIGHTING.dayStart) return lerp(0.2, 1, (t - LIGHTING.dawnStart) / (LIGHTING.dayStart - LIGHTING.dawnStart));
+        if (t < LIGHTING.duskStart) return 1;
+        if (t < LIGHTING.nightStart) return lerp(1, 0.25, (t - LIGHTING.duskStart) / (LIGHTING.nightStart - LIGHTING.duskStart));
+        return 0.25;
+    })();
+    const dimFactor = (() => {
+        if (state.weather.type === 'storm') return 0.35;
+        if (state.weather.type === 'rain') return 0.2;
+        if (state.weather.type === 'snow') return 0.1;
+        return 0;
+    })();
+    return Math.max(0.15, base - dimFactor * state.weather.intensity);
+}
+function drawLightingOverlay(ambientLight) {
+    const intensity = 1 - ambientLight;
+    if (intensity <= 0.01) return;
+    ctx.save();
+    ctx.fillStyle = `rgba(13, 22, 35, ${intensity * 0.85})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+}
+function drawWeatherLayer() {
+    if (!state.weather.particles.length) return;
+    ctx.save();
+    const type = state.weather.type;
+    ctx.fillStyle = type === 'snow' ? '#ffffff' : '#9cb7ff';
+    ctx.globalAlpha = type === 'snow' ? 0.7 * state.weather.intensity : 0.5 * state.weather.intensity;
+    state.weather.particles.forEach(p => {
+        const width = type === 'snow' ? 3 : 2;
+        const height = type === 'snow' ? 3 : 6;
+        ctx.fillRect(p.x, p.y, width, height);
+    });
+    ctx.restore();
+    if (type === 'stone') {
+        ctx.save();
+        ctx.fillStyle = `rgba(10, 15, 25, ${0.25 * state.weather.intensity})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+    }
+}
+function isNightTime() {
+    return state.timeOfDay >= LIGHTING.nightStart || state.timeOfDay < LIGHTING.dawnStart;
+}
+function formatTimeOfDay(normalized) {
+    const totalMinutes = Math.floor((normalized * 24 * 60) % (24 * 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours.toString().padStart(2,'0')}:${minutes.toString().padStart(2,'0')}`;
+}
+function lerp(a, b, t) {
+    return a + (b - a) * Math.min(1, Math.max(0, t));
 }
 function drawAgents() {
     const speed = 0.05;
