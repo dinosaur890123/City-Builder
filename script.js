@@ -124,6 +124,7 @@ const TERRAIN_COLORS = {
 }
 const PERSON_ANIMATION_DURATION = 1400;
 let peopleAnimations = [];
+let floatingTexts = [];
 let state = {
     money: 1000,
     wood: 50,
@@ -365,7 +366,7 @@ function drawTile(tile) {
     ctx.strokeStyle = 'rgba(0,0,0,0.1)';
     ctx.lineWidth = 1;
     ctx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
-    if (tile.type.startsWith('house') || tile.type === 'commercial' || tile.type === 'industry' || tile.type === 'factory') {
+    if (tile.type.startsWith('house') || tile.type === 'commercial' || tile.type === 'industry' || tile.type === 'factory' || tile.type === 'quarry') {
         ctx.fillStyle = 'rgba(255,255,255,0.8)';
         ctx.font = 'bold 20px Arial';
         ctx.textAlign = 'center';
@@ -375,7 +376,6 @@ function drawTile(tile) {
         if (tile.type === 'house2') label = 'H2';
         if (tile.type === 'house3') label = 'H3';
         if (tile.type === 'commercial') label = '$';
-        if (tile.type === 'industry') label = 'W';
         if (tile.type === 'industry') label = 'W';
         if (tile.type === 'factory') label = 'F';
         if (tile.type === 'quarry') label = 'Q';
@@ -704,7 +704,8 @@ function spawnAgents() {
                 y: home.y,
                 job: null,
                 path: [],
-                pathIndex: 0
+                pathIndex: 0,
+                animationSeed: Math.random() * Math.PI * 2
             };
             state.agents.push(newAgent);
             recalculateJobs();
@@ -717,7 +718,6 @@ function startGameLoop() {
         const previousDay = state.day;
         updateTimeAndWeather(TICK_RATE);
         const newDayStarted = state.day !== previousDay;
-        state.day++;
         if (state.population < state.populationCap) {
             state.population++;
             spawnAgents();
@@ -731,9 +731,19 @@ function startGameLoop() {
                 let tile = state.grid[y][x];
                 if (tile.workers > 0) {
                     let b = BUILDINGS[tile.type];
-                    if (b.incomePerWorker) dailyIncome += (tile.workers * b.incomePerWorker);
-                    if (b.woodPerWorker) dailyWood += (tile.workers * b.woodPerWorker);
-                    if (b.stonePerWorker) dailyStone += (tile.workers * b.stonePerWorker);
+                    if (b.incomePerWorker) {
+                        const inc = (tile.workers * b.incomePerWorker);
+                        dailyIncome += inc;
+                        spawnFloatingText(x, y, `+$${Math.floor(inc)}`, '#2ecc71');
+                    }
+                    if (b.woodPerWorker) {
+                        const w = (tile.workers * b.woodPerWorker);
+                        dailyWood += w;
+                    }
+                    if (b.stonePerWorker) {
+                        const s = (tile.workers * b.stonePerWorker);
+                        dailyStone += s;
+                    }
                 }
             }
         }
@@ -781,8 +791,9 @@ function renderLoop(timestamp) {
         ctx.lineWidth = 2;
         ctx.strokeRect(input.hoverX * TILE_SIZE, input.hoverY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
     }
-    drawAgents();
+    drawAgents(timestamp, delta);
     ctx.restore();
+    updateAndRenderFloatingTexts(timestamp);
     drawLightingOverlay(ambientLight);
     drawWeatherLayer();
     document.getElementById('debug-info').innerText = `Pos: ${Math.floor(camera.x)},${Math.floor(camera.y)} | Zoom: ${camera.zoom.toFixed(2)}`;
@@ -802,6 +813,8 @@ function updateTimeAndWeather(deltaMs) {
         state.weather.nextChange = now + next.minDuration + Math.random() * (next.maxDuration - next.minDuration);
         state.weather.particles = [];
     }
+    const timeLabel = document.getElementById('stat-time');
+    if (timeLabel) timeLabel.innerText = formatTimeOfDay(state.timeOfDay);
 }
 function updateWeatherParticles(deltaMs) {
     if (!canvas) return;
@@ -871,7 +884,7 @@ function drawWeatherLayer() {
         ctx.fillRect(p.x, p.y, width, height);
     });
     ctx.restore();
-    if (type === 'stone') {
+    if (type === 'storm') {
         ctx.save();
         ctx.fillStyle = `rgba(10, 15, 25, ${0.25 * state.weather.intensity})`;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -890,33 +903,39 @@ function formatTimeOfDay(normalized) {
 function lerp(a, b, t) {
     return a + (b - a) * Math.min(1, Math.max(0, t));
 }
-function drawAgents() {
-    const speed = 0.05;
+function drawAgents(timestamp, deltaMs) {
+    const moveSpeed = deltaMs ? Math.max(0.02, 0.05 * (deltaMs / 16)) : 0.05;
     state.agents.forEach(agent => {
         if (!agent.job || agent.path.length === 0) return;
         if (agent.pathIndex >= agent.path.length) {
             agent.pathIndex = 0;
             agent.x = agent.homeX;
             agent.y = agent.homeY;
-        }
-        let target = agent.path[agent.pathIndex];
-        let dx = target.x - agent.x;
-        let dy = target.y - agent.y;
-        let dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist < speed) {
-            agent.x = target.x;
-            agent.y = target.y;
-            agent.pathIndex++;
         } else {
-            agent.x += (dx/dist) * speed;
-            agent.y += (dy/dist) * speed;
+            let target = agent.path[agent.pathIndex];
+            let dx = target.x - agent.x;
+            let dy = target.y - agent.y;
+            let dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < moveSpeed) {
+                agent.x = target.x;
+                agent.y = target.y;
+                agent.pathIndex++;
+            } else if (dist > 0) {
+                agent.x += (dx / dist) * moveSpeed;
+                agent.y += (dy / dist) * moveSpeed;
+            }
         }
+        
         const screenX = agent.x * TILE_SIZE + TILE_SIZE / 2;
         const screenY = agent.y * TILE_SIZE + TILE_SIZE / 2;
+        const bob = Math.sin(((timestamp ?? performance.now()) / 300) + agent.animationSeed) * TILE_SIZE * 0.06;
         ctx.fillStyle = '#f1c40f';
         ctx.beginPath();
-        ctx.arc(screenX, screenY, TILE_SIZE / 6, 0, Math.PI * 2);
+        ctx.ellipse(screenX, screenY + bob, TILE_SIZE * 0.18, TILE_SIZE * 0.26, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#f5d76e';
+        ctx.beginPath();
+        ctx.arc(screenX, screenY + bob - TILE_SIZE * 0.18, TILE_SIZE * 0.12, 0, Math.PI * 2);
         ctx.fill();
     });
 }
@@ -960,6 +979,7 @@ function handleMapClick() {
         if (tileData.type === 'grass' || tileData.type === 'water') return;
         if (state.money >= tool.cost) {
             state.money -= tool.cost;
+            spawnFloatingText(x, y, `-$${tool.cost}`, '#e74c3c');
             if (BUILDINGS[tileData.type].popCap) {
                 state.populationCap -= BUILDINGS[tileData.type].popCap;
                 state.agents = state.agents.filter(a => !(a.homeX === x && a.homeY === y));
@@ -984,6 +1004,7 @@ function handleMapClick() {
         state.money -= tool.cost;
         state.wood -= (tool.wood || 0);
         state.stone -= (tool.stone || 0);
+        spawnFloatingText(x, y, `-$${tool.cost}`, '#e74c3c');
         tileData.type = tool.type;
         if (tool.popCap) {
             state.populationCap += tool.popCap;
@@ -1051,6 +1072,80 @@ function updateAndRenderPersonAnimations(timestamp) {
     }
     peopleAnimations = active;
 }
+function spawnFloatingText(tileX, tileY, text, color) {
+    floatingTexts.push({
+        x: tileX * TILE_SIZE + TILE_SIZE / 2,
+        y: tileY * TILE_SIZE,
+        text: text,
+        color: color,
+        start: performance.now(),
+        duration: 2000,
+        vy: -0.04
+    });
+}
+function updateAndRenderFloatingTexts(timestamp) {
+    const now = timestamp ?? performance.now();
+    const active = [];
+    ctx.font = 'bold 20px Calibri';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    for (const txt of floatingTexts) {
+        const elapsed = now - txt.start;
+        if (elapsed < txt.duration) {
+            const progress = elapsed / txt.duration;
+            const yOffset = txt.vy * elapsed;
+            const alpha = 1 - Math.pow(progress, 3);
+            ctx.save();
+            ctx.fillStyle = txt.color;
+            ctx.globalAlpha = alpha;
+            ctx.shadowColor = 'black';
+            ctx.shadowBlur = 2;
+            ctx.fillText(txt.text, txt.x, txt.y + yOffset);
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 1;
+            ctx.strokeText(txt.text, txt.x, txt.y + yOffset);
+            ctx.restore();
+            active.push(txt);
+        }
+    }
+    floatingTexts = active;
+}
+function drawPlacementPreview() {
+    if (state.selectedTool === 'select' || input.hoverX < 0 || input.hoverY < 0) return;
+    const x = input.hoverX;
+    const y = input.hoverY;
+    if (x >= WORLD_SIZE || y >= WORLD_SIZE || x < 0 || y < 0) return;
+    const tileData = state.grid[y][x];
+    const tool = BUILDINGS[state.selectedTool];
+    let isValid = false;
+    let color = 'rgba(231, 76, 60, 0.5)';
+    if (state.selectedTool === 'bulldoze') {
+        if (tileData.type !== 'grass' && tileData.type !== 'water') {
+            isValid = true;
+            color = 'rgba(231, 76, 60, 0.6)';
+        }
+    } else if (tool) {
+        const isWater = tileData.type === 'water';
+        const isOccupied = tileData.type !== 'grass';
+        let isUpgrade = false;
+        if ((tileData.type === 'house1' && tool.type === 'house2') || (tileData.type === 'house1' && tool.type === 'house3') || (tileData.type === 'house2' && tool.type === 'house3')) {
+            isUpgrade = true;
+        }
+        if (!isWater && (!isOccupied || isUpgrade)) {
+            isValid = true;
+            color = 'rgba(46, 204, 113, 0.5)';
+        }
+    }
+    const px = x * TILE_SIZE;
+    const py = y * TILE_SIZE;
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+    ctx.strokeStyle = isValid ? '#2ecc71' : '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
+    ctx.restore();
+}
 function updateUI() {
     document.getElementById('stat-money').innerText = `$${state.money}`;
     document.getElementById('stat-wood').innerText = state.wood;
@@ -1059,6 +1154,8 @@ function updateUI() {
     document.getElementById('stat-population-cap').innerText = state.populationCap;
     document.getElementById('stat-employed').innerText = `${state.employedCount}`;
     document.getElementById('stat-day').innerText = state.day;
+    const timeLabel = document.getElementById('stat-time');
+    if (timeLabel) timeLabel.innerText = formatTimeOfDay(state.timeOfDay);
     updateObjectiveUI();
 }
 function recordBuildForObjectives(buildType) {
@@ -1152,7 +1249,7 @@ function updateObjectiveUI() {
     const current = getCurrentObjective();
     if (!current) {
         panel.classList.add('objective-complete');
-        if (descriptionElement) descriptionEl.innerText = 'All objectives complete! Keep building your city.';
+        if (descriptionElement) descriptionElement.innerText = 'All objectives complete! Keep building your city.';
         if (progressElement) progressElement.innerHTML = '';
         return;
     }
@@ -1241,4 +1338,3 @@ window.addEventListener('load', () => {
         startGame();
     }
 })
-window.onload = init;
