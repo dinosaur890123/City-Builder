@@ -149,7 +149,8 @@ let state = {
         intensity: 0,
         nextChange: 0,
         particles: []
-    }
+    },
+    isPaused: false
 };
 let camera = {
     x: 0,
@@ -164,7 +165,9 @@ let input = {
     lastMouseX: 0,
     lastMouseY: 0,
     hoverX: -1,
-    hoverY: -1
+    hoverY: -1,
+    mouseX: 0,
+    mouseY: 0
 };
 let currentAmbientLight = 1;
 let nightLightingActive = false;
@@ -173,10 +176,10 @@ let canvas, ctx;
 let minimapCanvas, minimapCtx;
 let hasStarted = false;
 const tutorialSteps = [
-    {id: 'intro', text: 'Welcome to City Builder! Drag to pan and scroll to zoom.', autoAdvance: 3500},
-    {id: 'road', text: 'Select the Road tool and place one Road tile', event: 'build:road'},
-    {id: 'house', text: 'Great! Now place a House I next to your road', event: 'build:house1'},
-    {id: 'market', text: 'Build a Market to create jobs and income.', event: 'build:commercial'}
+    {id: 'intro', text: 'Welcome to City Builder! you can drag to pan and scroll to zoom!', autoAdvance: 3500},
+    {id: 'road', text: 'Select the Road tool and place a Road tile', event: 'build:road'},
+    {id: 'house', text: 'Yay! Now place a House I next to your road', event: 'build:house1'},
+    {id: 'market', text: 'Build a Market to create jobs and incomr', event: 'build:commercial'}
 ];
 const OBJECTIVES = [
     {
@@ -187,13 +190,13 @@ const OBJECTIVES = [
     },
     {
         id: 'populate_settlement',
-        description: 'Reach a population of 5 by constructing housing.',
+        description: 'Reach a population of 5 by building housing.',
         requirements: {population: 5},
         reward: {money: 100, wood: 20}
     },
     {
         id: 'open_market',
-        description: 'Construct a Market to create jobs and income.',
+        description: 'Construct a Market to create jobs and income',
         requirements: {build: {commercial: 1}},
         reward: {money: 150}
     },
@@ -205,7 +208,7 @@ const OBJECTIVES = [
     },
     {
         id: 'grow_treasury',
-        description: 'Collect $2000',
+        description: 'Collect $2k',
         requirements: {money: 2000},
         reward: {wood: 40, stone: 20}
     }
@@ -345,6 +348,8 @@ function updateHover(screenX, screenY) {
     const worldY = (screenY - rect.top - canvas.height/2) / camera.zoom + camera.y;
     input.hoverX = Math.floor(worldX / TILE_SIZE);
     input.hoverY = Math.floor(worldY / TILE_SIZE);
+    input.mouseX = screenX;
+    input.mouseY = screenY;
 }
 function setupCanvas() {
     const canvas = document.getElementById('agent-layer');
@@ -462,6 +467,7 @@ function loadGame() {
 }
 function selectTool(toolName) {
     state.selectedTool = toolName;
+    hideSelectionTooltip();
     document.querySelectorAll('.tool-button').forEach(button => button.classList.remove('active'));
     const buttons = document.querySelectorAll('.tool-button');
     for (let button of buttons) {
@@ -715,6 +721,7 @@ function spawnAgents() {
 }
 function startGameLoop() {
     setInterval(() => {
+        if (state.isPaused) return;
         const previousDay = state.day;
         updateTimeAndWeather(TICK_RATE);
         const newDayStarted = state.day !== previousDay;
@@ -769,8 +776,12 @@ function renderLoop(timestamp) {
     const endRow = Math.floor(Math.min(WORLD_SIZE, (viewY + viewH) / TILE_SIZE + 1));
     const delta = lastFrameTime ? (timestamp - lastFrameTime) : 16;
     lastFrameTime = timestamp;
-    updateWeatherParticles(delta);
-    ctx.fillStyle = '#1a1a1a';
+    if (!state.isPaused) {
+        updateWeatherParticles(delta);
+    } else {
+        delta = 0;
+    }
+    ctx.fillStyle = '#282626';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const ambientLight = getAmbientLightLevel();
     currentAmbientLight = ambientLight;
@@ -785,7 +796,7 @@ function renderLoop(timestamp) {
             drawTile(state.grid[y][x]);
         }
     }
-    updateAndRenderPersonAnimations(timestamp);
+    if (!state.isPaused) updateAndRenderPersonAnimations(timestamp);
     if (input.hoverX >= 0 && input.hoverX < WORLD_SIZE && input.hoverY >= 0 && input.hoverY < WORLD_SIZE) {
         ctx.strokeStyle = 'white';
         ctx.lineWidth = 2;

@@ -251,3 +251,50 @@ footer {
     padding: 0.75rem 1.75rem;
     font-size: 1.05rem;
 }
+.tile-tooltip {
+    position: absolute;
+    background: #3e3c3c;
+    color: #e4f1f4;
+    border: 1px solid #324960;
+    border-radius: 7px;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+    min-width: 140px;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 50;
+}
+.tile-tooltip.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+.modal.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(16, 20, 26, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1200;
+    transition: opacity 0.2s ease;
+}
+.modal-content {
+    background: #ffffff;
+    padding: 18px 22px;
+    border-radius: 12px;
+    border: 2px solid #191919;
+    min-width: 260px;
+    text-align: center;
+}
+.modal-actions {
+    margin-top: 14px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}

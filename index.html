@@ -60,6 +60,15 @@
         <div id="debug-info">Pos: 0,0 | Zoom: 1.0</div>
     </div>
 
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Settings</h2>
+            <div class="modal-actions">
+                <button id="pause-toggle-button" class="tool-button system-button" onclick="togglePause()">Pause</button>
+                <button class="tool-button" onclick="closeSettings()">Close</button>
+            </div>
+        </div>
+    </div>
     <footer>
         <div id="controls">
             <button class="tool-button active" onclick="selectTool('select')">
@@ -113,6 +122,9 @@
             </button>
             <button class="tool-button system-button" onclick="loadGame()">
                 <span>Load</span>
+            </button>
+            <button class="tool-button system-button" onclick="openSettings()">
+                <span>Settings</span>
             </button>
         </div>
     </footer>
