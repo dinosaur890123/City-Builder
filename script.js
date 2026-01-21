@@ -1049,7 +1049,7 @@ function handleMapClick() {
         showMessage("Not enough resources");
     }
 }
-function spawnSelectionTooltip(tile, screenX, screenY) {
+function showSelectionTooltip(tile, screenX, screenY) {
     const tooltip = document.getElementById('tile-tooltip');
     const container = document.getElementById('game-container');
     if (!tooltip || !container) return;
@@ -1076,7 +1076,35 @@ function spawnSelectionTooltip(tile, screenX, screenY) {
     const maxX = rect.width - bounds.width - 8;
     const maxY = rect.height - bounds.height - 8;
     x = Math.max(8, Math.min(x, maxX));
-    y = Math.max(8, Math.min(y, ma));
+    y = Math.max(8, Math.min(y, maxY));
+    tooltip.style.left = `${x}px`;
+    tooltip.style.top = `${y}px`;
+}
+function hideSelectionTootip() {
+    const tooltip = document.getElementById('tile-tooltip');
+    if (!tooltip) return;
+    tooltip.classList.remove('visible');
+    tooltip.innerHTML = '';
+}
+function openSettings() {
+    const modal = document.getElementById('settings-modal');
+    if (!modal) return;
+    state.isPaused = true;
+    updatePauseButton();
+    modal.classList.remove('hidden');
+}
+function closeSettings() {
+    const modal = document.getElementById('settings-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+}
+function togglePause() {
+    state.isPaused = !state.isPaused;
+    updatePauseButton();
+}
+function updatePauseButton() {
+    const button = document.getElementById('pause-toggle-button');
+    if (button) button.innerText = state.isPaused ? 'Resume' : 'Pause';
 }
 function spawnPersonAnimation(tileX, tileY, count = 1) {
     const now = performance.now();
