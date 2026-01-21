@@ -807,6 +807,17 @@ function renderLoop(timestamp) {
     updateAndRenderFloatingTexts(timestamp);
     drawLightingOverlay(ambientLight);
     drawWeatherLayer();
+    if (state.isPaused) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillRect(0,0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ecf0f1';
+        ctx.font = 'bold 36px Calibri'; // yes calibri is my favourite font
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Paused', canvas.width / 2, canvas.height / 2);
+        ctx.restore();
+    }
     document.getElementById('debug-info').innerText = `Pos: ${Math.floor(camera.x)},${Math.floor(camera.y)} | Zoom: ${camera.zoom.toFixed(2)}`;
     requestAnimationFrame(renderLoop);
 }
@@ -982,9 +993,11 @@ function handleMapClick() {
     const tileData = state.grid[y][x];
     const tool = BUILDINGS[state.selectedTool];
     if (state.selectedTool === 'select') {
+        showSelectionTooltip(tileData, input.mouseX, input.mouseY);
         showMessage(`Inspect: ${tileData.type.toUpperCase()} at ${x},${y} (Workers: ${tileData.workers}/${tileData.maxWorkers})`);
         return;
     }
+    hideSelectionTooltip();
     
     if (state.selectedTool === 'bulldoze') {
         if (tileData.type === 'grass' || tileData.type === 'water') return;
@@ -1035,6 +1048,35 @@ function handleMapClick() {
     } else {
         showMessage("Not enough resources");
     }
+}
+function spawnSelectionTooltip(tile, screenX, screenY) {
+    const tooltip = document.getElementById('tile-tooltip');
+    const container = document.getElementById('game-container');
+    if (!tooltip || !container) return;
+    const building = BUILDINGS[tile.type];
+    if (!building) {
+        hideSelectionTooltip();
+        return;
+    }
+
+    const lines = [];
+    lines.push(`<strong>${building.name}</strong>`);
+    lines.push(`<div>Type: ${building.type}</div>`);
+    if (building.populationCap) lines.push(`<div>Population Cap: ${building.popCap}</div>`);
+    if (building.jobs) lines.push(`<div>Jobs: ${tile.workers}/${building.jobs}</div>`);
+    if (building.incomePerWorker) lines.push(`<div>Income/Worker: $${building.incomePerWorker}</div>`);
+    if (building.woodPerWorker) lines.push(`<div>Wood/Worker: ${building.woodPerWorker}</div>`);
+    if (building.stonePerWorker) lines.push(`<div>Stone/Worker: ${building.stonePerWorker}</div>`);
+    tooltip.innerHTML = lines.join('');
+    tooltip.classList.add('visible');
+    const rect = container.getBoundingClientRect();
+    let x = screenX - rect.left + 12;
+    let y = screenY - rect.top + 12;
+    const bounds = tooltip.getBoundingClientRect();
+    const maxX = rect.width - bounds.width - 8;
+    const maxY = rect.height - bounds.height - 8;
+    x = Math.max(8, Math.min(x, maxX));
+    y = Math.max(8, Math.min(y, ma));
 }
 function spawnPersonAnimation(tileX, tileY, count = 1) {
     const now = performance.now();
