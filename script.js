@@ -1060,13 +1060,26 @@ function showSelectionTooltip(tile, screenX, screenY) {
     }
 
     const lines = [];
-    lines.push(`<strong>${building.name}</strong>`);
-    lines.push(`<div>Type: ${building.type}</div>`);
-    if (building.populationCap) lines.push(`<div>Population Cap: ${building.popCap}</div>`);
-    if (building.jobs) lines.push(`<div>Jobs: ${tile.workers}/${building.jobs}</div>`);
-    if (building.incomePerWorker) lines.push(`<div>Income/Worker: $${building.incomePerWorker}</div>`);
-    if (building.woodPerWorker) lines.push(`<div>Wood/Worker: ${building.woodPerWorker}</div>`);
-    if (building.stonePerWorker) lines.push(`<div>Stone/Worker: ${building.stonePerWorker}</div>`);
+    if (building) {
+        lines.push(`<strong>${building.name}</strong>`);
+        lines.push(`<div>Type: ${building.type}</div>`);
+        if (building.populationCap) lines.push(`<div>Population Cap: ${building.popCap}</div>`);
+        if (building.jobs) lines.push(`<div>Jobs: ${tile.workers}/${building.jobs}</div>`);
+        if (building.incomePerWorker) lines.push(`<div>Income/Worker: $${building.incomePerWorker}</div>`);
+        if (building.woodPerWorker) lines.push(`<div>Wood/Worker: ${building.woodPerWorker}</div>`);
+        if (building.stonePerWorker) lines.push(`<div>Stone/Worker: ${building.stonePerWorker}</div>`);
+        const upgrades = getUpgradeOptions(tile.type);
+        if (upgrades.length) {
+            lines.push(`<div><strong>Upgrades:</strong></div>`);
+            upgrades.forEach(u => lines.push(`<div>${u}</div>`));
+        }
+    } else {
+        const terrainLabel = getTerrainLabel(tile.type);
+        lines.push(`<strong>${terrainLabel}</strong>`);
+        lines.push(`<div>Terrain: ${terrainLabel}</div>`);
+        lines.push(`<div>Build`)
+    }
+    
     tooltip.innerHTML = lines.join('');
     tooltip.classList.add('visible');
     const rect = container.getBoundingClientRect();
