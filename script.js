@@ -1077,7 +1077,7 @@ function showSelectionTooltip(tile, screenX, screenY) {
         const terrainLabel = getTerrainLabel(tile.type);
         lines.push(`<strong>${terrainLabel}</strong>`);
         lines.push(`<div>Terrain: ${terrainLabel}</div>`);
-        lines.push(`<div>Build`)
+        lines.push(`<div>Buildable: ${isBuildableTerrain(tile.type) ? 'Yes' : 'No'}</div>`);
     }
     
     tooltip.innerHTML = lines.join('');
@@ -1093,7 +1093,38 @@ function showSelectionTooltip(tile, screenX, screenY) {
     tooltip.style.left = `${x}px`;
     tooltip.style.top = `${y}px`;
 }
-function hideSelectionTootip() {
+function getTerrainLabel(type) {
+    if (type === 'grass') return 'Grass';
+    if (type === 'forest') return 'Forest';
+    if (type === 'water') return 'Water';
+    if (type === 'stone') return 'Stone';
+    return type.charAt(0).toUpperCase() + type.slice(1);
+}
+function isBuildableTerrain(type) {
+    return type !== 'water';
+}
+function getUpgradeOptions(tileType) {
+    if (tileType === 'house1') {
+        return [
+            formatUpgrade('house2'),
+            formatUpgradeLine('house3')
+        ];
+    }
+    if (tileType === 'house2') {
+        return [formatUpgradeLine('house3')];
+    }
+    return [];
+}
+function formatUpgradeLine(type) {
+    const b = BUILDINGS[type];
+    if (!b) return '';
+    const costParts = [];
+    if (b.cost) costParts.push(`$${b.cost}`);
+    if (b.wood) costParts.push(`${b.wood}W`);
+    if (b.stone) costParts.push(`${b.stone}S`);
+    return `${b.name} — ${costParts.join(', ') || 'Free'}`;
+}
+function hideSelectionTooltip() {
     const tooltip = document.getElementById('tile-tooltip');
     if (!tooltip) return;
     tooltip.classList.remove('visible');
