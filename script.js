@@ -11,6 +11,22 @@ const WEATHER_TYPES = [
     {type: 'storm', minDuration: 30000, maxDuration: 60000},
     {type: 'snow', minDuration: 60000, maxDuration: 110000}
 ];
+const SPRITE_PATH = 'assets/';
+const SPRITES = {};
+const SPRITE_FILES = {
+    road: 'road.png',
+    house1: 'house1.png',
+    house2: 'house2.png',
+    house3: 'house3.png',
+    commercial: 'commercial.png',
+    industry: 'industry.png',
+    quarry: 'quarry.png',
+    factory: 'factory.png',
+    park: 'park.png',
+    water: 'water.png',
+    forest: 'forest.png',
+    stone: 'stone.png'
+}
 const WEATHER_PARTICLE_BUDGET = 180;
 const WORLD_SIZE = 128;
 const TILE_SIZE = 64;
@@ -150,7 +166,9 @@ let state = {
         nextChange: 0,
         particles: []
     },
-    isPaused: false
+    isPaused: false,
+    weatherEnabled: true,
+    weatherIntensityMultiplier: 1
 };
 let camera = {
     x: 0,
@@ -223,8 +241,10 @@ function init() {
     minimapCanvas = document.getElementById('minimap');
     minimapCtx = minimapCanvas.getContext('2d');
     window.addEventListener('resize', resizeCanvas);
+    loadSprites();
     resizeCanvas();
     setupInputs();
+    setupSettingsControls();
     generateWorld();
     centerCamera();
     updateUI();
@@ -277,6 +297,13 @@ function generateWorld() {
         for (let x = cx-5; x < cx+5; x++) {
             state.grid[y][x].type = 'grass';
         }
+    }
+}
+function loadSprites() {
+    for (const [key, file] of Object.entries(SPRITE_FILES)) {
+        const image = new Image();
+        image.src = `${SPRITE_PATH}${file}`;
+        SPRITES[key] = image;
     }
 }
 function applyAutomataRule(targetType, emptyType, threshold) {
@@ -362,12 +389,18 @@ function setupCanvas() {
 function drawTile(tile) {
     const px = tile.x * TILE_SIZE;
     const py = tile.y * TILE_SIZE;
-    let color = TERRAIN_COLORS[tile.type] || '#ff00ff';
-    if (BUILDINGS[tile.type]) {
-        color = BUILDINGS[tile.type].color;
+
+    const sprite = SPRITES[tile.type];
+    if (sprite && sprite.complete) {
+        ctx.drawImage(sprite, px, py, TILE_SIZE, TILE_SIZE);
+    } else {
+        let color = TERRAIN_COLORS[tile.type] || '#ff00ff';
+        if (BUILDINGS[tile.type]) {
+            color = BUILDINGS[tile.type].color;
+        }
+        ctx.fillStyle = color;
+        ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
     }
-    ctx.fillStyle = color;
-    ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
     ctx.strokeStyle = 'rgba(0,0,0,0.1)';
     ctx.lineWidth = 1;
     ctx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
@@ -385,12 +418,6 @@ function drawTile(tile) {
         if (tile.type === 'factory') label = 'F';
         if (tile.type === 'quarry') label = 'Q';
         ctx.fillText(label, px + TILE_SIZE / 2, py + TILE_SIZE / 2);
-    }
-    if (tile.type === 'forest') {
-        ctx.fillStyle = '#229954';
-        ctx.beginPath();
-        ctx.arc(px + TILE_SIZE / 2, py + TILE_SIZE / 2, TILE_SIZE / 3, 0, Math.PI * 2);
-        ctx.fill();
     }
     if (nightLightingActive && (tile.type.startsWith('house') || tile.type === 'commercial' || tile.type === 'industry' || tile.type === 'factory')) {
         const glowAlpha = 0.35 + (1 - currentAmbientLight) * 0.5;
@@ -433,6 +460,8 @@ function loadGame() {
                 job: null
             }))
         };
+        if (typeof state.weatherEnabled === 'undefined') state.weatherEnabled = true;
+        if (typeof state.weatherIntensityMultiplier === 'undefined') state.weatherIntensityMultiplier = 1;
         const defaultObjectives = {
             activeIndex: 0,
             progress: {build: {}},
@@ -457,6 +486,7 @@ function loadGame() {
             tutorialTimeout = null;
         }
         updateUI();
+        updateSettingsUI();
         drawMinimap();
         recalculateJobs();
         showMessage("Game loaded!");
@@ -475,6 +505,39 @@ function selectTool(toolName) {
         else if (BUILDINGS[toolName] && button.innerText.includes(BUILDINGS[toolName].name)) button.classList.add('active');
         else if (toolName === 'bulldoze' && button.innerText.includes('Bulldoze')) button.classList.add('active');
     }
+}
+function updateSettingsControls() {
+    const toggle = document.getElementById('weather-toggle');
+    const slider = document.getElementById('weather-intensity');
+    const valueLabel = document.getElementById('weather-intensity-value');
+    if (!toggle || !slider || !valueLabel) return;
+    updateSettingsUI();
+    toggle.addEventListener('change', () => {
+        state.weatherEnabled = toggle.checked;
+        slider.disabled = !toggle.checked;
+        updateSettingsUI();
+    })
+    slider.addEventListener('input', () => {
+        const value = Math.max(0, Math.min(100, Number(slider.value)));
+        state.weatherIntensityMultiplier = value / 100;
+        valueLabel.innerText = `${value}%`;
+    })
+}
+function updateSettingsUI() {
+    const toggle = document.getElementById('weather-toggle');
+    const slider = document.getElementById('weather-intensity');
+    const valueLabel = document.getElementById('weather-intensity-value');
+    if (!toggle || !slider || !valueLabel) return;
+    toggle.checked = !!state.weatherEnabled;
+    const value = Math.round((state.weatherIntensityMultiplier ?? 1) * 100);
+    slider.value = `${value}`;
+    slider.disabled = !toggle.checked;
+    valueLabel.innerText = `${value}%`;
+}
+function getEffectiveWeatherIntensity() {
+    if (!state.weatherEnabled) return 0;
+    const raw = state.weather.intensity * (state.weatherIntensityMultiplier ?? 1);
+    return Math.max(0, Math.min(1, raw));
 }
 function handleTileClick(x, y) {
     const tileData = state.grid[y][x];
@@ -827,6 +890,14 @@ function updateTimeAndWeather(deltaMs) {
     if (previousTime > state.timeOfDay) {
         state.day++;
     }
+    if (!state.weatherEnabled) {
+        state.weather.type = 'clear';
+        state.weather.intensity = 0;
+        state.weather.particles = [];
+        const timeLabel = document.getElementById('stat-time');
+        if (timeLabel) timeLabel.innerText = formatTimeOfDay(state.timeOfDay);
+        return;
+    }
     const now = performance.now();
     if (now >= state.weather.nextChange) {
         const next = WEATHER_TYPES[Math.floor(Math.random() * WEATHER_TYPES.length)];
@@ -840,7 +911,8 @@ function updateTimeAndWeather(deltaMs) {
 }
 function updateWeatherParticles(deltaMs) {
     if (!canvas) return;
-    if (state.weather.type === 'clear') {
+    const effectiveIntensity = getEffectiveWeatherIntensity();
+    if (effectiveIntensity <= 0 || state.weather.type === 'clear') {
         state.weather.particles = [];
         return;
     }
@@ -884,7 +956,8 @@ function getAmbientLightLevel() {
         if (state.weather.type === 'snow') return 0.1;
         return 0;
     })();
-    return Math.max(0.15, base - dimFactor * state.weather.intensity);
+    const effectiveIntensity = getEffectiveWeatherIntensity();
+    return Math.max(0.15, base - dimFactor * effectiveIntensity);
 }
 function drawLightingOverlay(ambientLight) {
     const intensity = 1 - ambientLight;
@@ -896,6 +969,8 @@ function drawLightingOverlay(ambientLight) {
 }
 function drawWeatherLayer() {
     if (!state.weather.particles.length) return;
+    const effectiveIntensity = getEffectiveWeatherIntensity();
+    if (effectiveIntensity <= 0) return;
     ctx.save();
     const type = state.weather.type;
     ctx.fillStyle = type === 'snow' ? '#ffffff' : '#9cb7ff';

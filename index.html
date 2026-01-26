@@ -67,6 +67,16 @@
                 <button id="pause-toggle-button" class="tool-button system-button" onclick="togglePause()">Pause</button>
                 <button class="tool-button" onclick="closeSettings()">Close</button>
             </div>
+            <div class="settings-section">
+                <label>
+                    <input type="checkbox" id="weather-toggle">Weather Effects</label>
+                </label>
+            </div>
+            <div class="settings-section">
+                <label for="weather-intensity">Weather Intensity</label>
+                <input type="range" id="weather-intensity" min="0" max="100" step="5">
+                <span id="weather-intensity-value">100%</span>
+            </div>
         </div>
     </div>
     <footer>
