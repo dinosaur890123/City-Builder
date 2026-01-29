@@ -168,7 +168,8 @@ let state = {
     },
     isPaused: false,
     weatherEnabled: true,
-    weatherIntensityMultiplier: 1
+    weatherIntensityMultiplier: 1,
+    trade: {carts: [], tick: 0}
 };
 let camera = {
     x: 0,
@@ -246,6 +247,7 @@ function init() {
     setupInputs();
     setupSettingsControls();
     generateWorld();
+    ensureTradeDataOnGrid();
     centerCamera();
     updateUI();
     drawMinimap();
@@ -272,7 +274,10 @@ function generateWorld() {
                 x, y,
                 workers: 0,
                 maxWorkers: 0,
-                variant: Math.random()
+                variant: Math.random(),
+                goods: 0,
+                stock: 0,
+                tradeCooldown: 0
             });
         }
         state.grid.push(row);
@@ -458,7 +463,8 @@ function loadGame() {
                 path: [],
                 pathIndex: 0,
                 job: null
-            }))
+            })),
+            trade: {carts: [], tick: 0}
         };
         if (typeof state.weatherEnabled === 'undefined') state.weatherEnabled = true;
         if (typeof state.weatherIntensityMultiplier === 'undefined') state.weatherIntensityMultiplier = 1;
@@ -677,6 +683,16 @@ function getAdjacentRoads(cx, cy) {
         }
     }
     return roads;
+}
+function ensureTradeDataOnGrid() {
+    for (let y = 0; y < WORLD_SIZE; y++) {
+        for (let x = 0; x < WORLD_SIZE; x++) {
+            const tile = state.grid[y][x];
+            tile.goods = tile.goods;
+            tile.stock = tile.stock || 0;
+            tile.tradeCooldown = tile.tradeCooldown || 0;
+        }
+    }
 }
 function recalculateJobs() {
     for (let y = 0; y < WORLD_SIZE; y++) {
