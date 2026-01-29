@@ -492,6 +492,8 @@ function loadGame() {
             tutorialTimeout = null;
         }
         updateUI();
+        ensureTradeDataOnGrid();
+        initTradeSystem();
         updateSettingsUI();
         drawMinimap();
         recalculateJobs();
@@ -833,6 +835,7 @@ function startGameLoop() {
                 }
             }
         }
+        const tradeBonus = typeof tradeTick === 'function' ? tradeTick() : 0;
         state.money += Math.floor(dailyIncome);
         state.wood += Math.floor(dailyWood);
         state.stone += Math.floor(dailyStone);
@@ -875,6 +878,8 @@ function renderLoop(timestamp) {
             drawTile(state.grid[y][x]);
         }
     }
+    if (typeof updateTradeCarts === 'function') updateTradeCarts(delta);
+    if (typeof renderTradeCarts === 'function') renderTradeCarts(ctx);
     if (!state.isPaused) updateAndRenderPersonAnimations(timestamp);
     if (input.hoverX >= 0 && input.hoverX < WORLD_SIZE && input.hoverY >= 0 && input.hoverY < WORLD_SIZE) {
         ctx.strokeStyle = 'white';
@@ -1102,6 +1107,9 @@ function handleMapClick() {
             tileData.type = 'grass';
             tileData.workers = 0;
             tileData.maxWorkers = 0;
+            tileData.goods = 0;
+            tileData.stock = 0;
+            tileData.tradeCooldown = 0;
             updateUI();
             drawMinimap();
             recalculateJobs();
@@ -1121,6 +1129,9 @@ function handleMapClick() {
         state.stone -= (tool.stone || 0);
         spawnFloatingText(x, y, `-$${tool.cost}`, '#e74c3c');
         tileData.type = tool.type;
+        tileData.goods = 0;
+        tileData.stock = 0;
+        tileData.tradeCooldown = 0;
         if (tool.popCap) {
             state.populationCap += tool.popCap;
             spawnPersonAnimation(x, y, Math.min(3, Math.max(1, Math.ceil(tool.popCap / 5))));
@@ -1159,6 +1170,9 @@ function showSelectionTooltip(tile, screenX, screenY) {
         if (building.incomePerWorker) lines.push(`<div>Income/Worker: $${building.incomePerWorker}</div>`);
         if (building.woodPerWorker) lines.push(`<div>Wood/Worker: ${building.woodPerWorker}</div>`);
         if (building.stonePerWorker) lines.push(`<div>Stone/Worker: ${building.stonePerWorker}</div>`);
+        if (typeof getTradeInfoLines === 'function') {
+            lines.push(...getTradeInfoLines(tile));
+        }
         const upgrades = getUpgradeOptions(tile.type);
         if (upgrades.length) {
             lines.push(`<div><strong>Upgrades:</strong></div>`);
