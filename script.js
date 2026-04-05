@@ -184,7 +184,7 @@ let state = {
         },
         completed: []
     },
-    timeOfDay: 0,
+    timeOfDay: 0.34,
     weather: {
         type: 'clear',
         intensity: 0,
@@ -394,25 +394,27 @@ function simulateEconomyTick() {
             const tile = state.grid[y][x];
             const building = BUILDINGS[tile.type];
             if (!building || tile.workers <= 0) continue;
+            const effectiveWorkers = getEffectiveWorkers(tile.workers, tile.type);
+            if (effectiveWorkers <= 0.05) continue;
 
             if (building.incomePerWorker) {
-                const amount = tile.workers * building.incomePerWorker * productionFactor;
+                const amount = effectiveWorkers * building.incomePerWorker * productionFactor;
                 wageIncome += amount;
                 if (Math.random() < 0.15) {
                     spawnFloatingText(x, y, `+$${Math.floor(amount)}`, '#2ecc71');
                 }
             }
             if (building.woodPerWorker) {
-                producedWood += tile.workers * building.woodPerWorker * productionFactor;
+                producedWood += effectiveWorkers * building.woodPerWorker * productionFactor;
             }
             if (building.stonePerWorker) {
-                producedStone += tile.workers * building.stonePerWorker * productionFactor;
+                producedStone += effectiveWorkers * building.stonePerWorker * productionFactor;
             }
             if (building.woodConsumptionPerWorker) {
-                consumedWood += tile.workers * building.woodConsumptionPerWorker;
+                consumedWood += effectiveWorkers * building.woodConsumptionPerWorker;
             }
             if (building.stoneConsumptionPerWorker) {
-                consumedStone += tile.workers * building.stoneConsumptionPerWorker;
+                consumedStone += effectiveWorkers * building.stoneConsumptionPerWorker;
             }
         }
     }
@@ -1182,15 +1184,40 @@ function formatTimeOfDay(normalized) {
 function lerp(a, b, t) {
     return a + (b - a) * Math.min(1, Math.max(0, t));
 }
+function getWorkerActivityRatio(buildingType) {
+    const t = state.timeOfDay;
+    if (t >= LIGHTING.duskStart && t < LIGHTING.nightStart) {
+        return lerp(1, 0.28, (t - LIGHTING.duskStart) / (LIGHTING.nightStart - LIGHTING.duskStart));
+    }
+    if (t >= LIGHTING.dawnStart && t < LIGHTING.dayStart) {
+        return lerp(0.28, 1, (t - LIGHTING.dawnStart) / (LIGHTING.dayStart - LIGHTING.dawnStart));
+    }
+    if (!isNightTime()) return 1;
+    if (buildingType === 'factory') return 0.32;
+    if (buildingType === 'commercial') return 0.24;
+    if (buildingType === 'industry' || buildingType === 'quarry') return 0.14;
+    return 0.18;
+}
+function getEffectiveWorkers(workerCount, buildingType) {
+    return workerCount * getWorkerActivityRatio(buildingType);
+}
+function isAgentOnNightShift(agent) {
+    const jobType = state.grid[agent.job?.y]?.[agent.job?.x]?.type;
+    const chance = jobType === 'factory' ? 0.3 : jobType === 'commercial' ? 0.22 : 0.14;
+    const seed = (agent.id * 9301 + agent.homeX * 49297 + agent.homeY * 233280) % 1;
+    return seed < chance;
+}
 function drawAgents(timestamp, deltaMs) {
     const moveSpeed = deltaMs ? Math.max(0.02, 0.05 * (deltaMs / 16)) : 0.05;
+    const night = isNightTime();
     state.agents.forEach(agent => {
         if (!agent.job || agent.path.length === 0) return;
-        if (agent.pathIndex >= agent.path.length) {
+        const activeAtNight = !night || isAgentOnNightShift(agent);
+        if (activeAtNight && agent.pathIndex >= agent.path.length) {
             agent.pathIndex = 0;
             agent.x = agent.homeX;
             agent.y = agent.homeY;
-        } else {
+        } else if (activeAtNight) {
             let target = agent.path[agent.pathIndex];
             let dx = target.x - agent.x;
             let dy = target.y - agent.y;
@@ -1203,11 +1230,25 @@ function drawAgents(timestamp, deltaMs) {
                 agent.x += (dx / dist) * moveSpeed;
                 agent.y += (dy / dist) * moveSpeed;
             }
+        } else {
+            const sleepSpeed = moveSpeed * 0.65;
+            let dx = agent.homeX - agent.x;
+            let dy = agent.homeY - agent.y;
+            let dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < sleepSpeed) {
+                agent.x = agent.homeX;
+                agent.y = agent.homeY;
+                agent.pathIndex = 0;
+            } else if (dist > 0) {
+                agent.x += (dx / dist) * sleepSpeed;
+                agent.y += (dy / dist) * sleepSpeed;
+            }
         }
         
         const screenX = agent.x * TILE_SIZE + TILE_SIZE / 2;
         const screenY = agent.y * TILE_SIZE + TILE_SIZE / 2;
-        const bob = Math.sin(((timestamp ?? performance.now()) / 300) + agent.animationSeed) * TILE_SIZE * 0.06;
+        const bobScale = activeAtNight ? 1 : 0.35;
+        const bob = Math.sin(((timestamp ?? performance.now()) / 300) + agent.animationSeed) * TILE_SIZE * 0.06 * bobScale;
         ctx.fillStyle = '#f1c40f';
         ctx.beginPath();
         ctx.ellipse(screenX, screenY + bob, TILE_SIZE * 0.18, TILE_SIZE * 0.26, 0, 0, Math.PI * 2);

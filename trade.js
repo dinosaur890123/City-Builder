@@ -25,11 +25,13 @@ function tradeTick() {
         for (let x = 0; x < WORLD_SIZE; x++) {
             const tile = state.grid[y][x];
             tile.tradeCooldown = Math.max(0, tile.tradeCooldown || 0);
-            if (isProducer(tile) && tile.workers > 0) {
-                tile.goods = Math.min(TRADE_SETTINGS.maxGoods, (tile.goods || 0) + 1 + Math.floor(tile.workers / 4));
+            const activityRatio = typeof getWorkerActivityRatio === 'function' ? getWorkerActivityRatio(tile.type) : 1;
+            const activeWorkers = tile.workers * activityRatio;
+            if (isProducer(tile) && activeWorkers > 0.25) {
+                tile.goods = Math.min(TRADE_SETTINGS.maxGoods, (tile.goods || 0) + 1 + Math.floor(activeWorkers / 4));
             }
-            if (isConsumer(tile) && tile.workers > 0 && (tile.stock || 0) > 0) {
-                bonusIncome += TRADE_SETTINGS.stockBonusIncome + Math.floor(tile.workers / 2);
+            if (isConsumer(tile) && activeWorkers > 0.25 && (tile.stock || 0) > 0) {
+                bonusIncome += TRADE_SETTINGS.stockBonusIncome + Math.floor(activeWorkers / 2);
                 if (state.trade.tick % 3 === 0) {
                     tile.stock = Math.max(0, (tile.stock || 0) - 1);
                 }
@@ -42,7 +44,8 @@ function tradeTick() {
     for (let y = 0; y < WORLD_SIZE; y++) {
         for (let x = 0; x < WORLD_SIZE; x++) {
             const tile = state.grid[y][x];
-            if (isConsumer(tile) && tile.workers > 0 && (tile.stock || 0) < TRADE_SETTINGS.maxStock) {
+            const activityRatio = typeof getWorkerActivityRatio === 'function' ? getWorkerActivityRatio(tile.type) : 1;
+            if (isConsumer(tile) && tile.workers * activityRatio > 0.25 && (tile.stock || 0) < TRADE_SETTINGS.maxStock) {
                 consumers.push({x, y});
             }
         }
