@@ -1,9 +1,9 @@
 const TRADE_SETTINGS = {
     producerTypes: ['industry', 'quarry', 'factory'],
     consumerTypes: ['commercial'],
-    maxGoods: 5,
-    maxStock: 5,
-    stockBonusIncome: 4,
+    maxGoods: 6,
+    maxStock: 7,
+    stockBonusIncome: 3,
     producerCooldownTicks: 2,
     cartSpeedTilesPerMs: 0.0025,
     maxCarts: 25
@@ -26,11 +26,11 @@ function tradeTick() {
             const tile = state.grid[y][x];
             tile.tradeCooldown = Math.max(0, tile.tradeCooldown || 0);
             if (isProducer(tile) && tile.workers > 0) {
-                tile.goods = Math.min(TRADE_SETTINGS.maxGoods, (tile.goods || 0) + 1);
+                tile.goods = Math.min(TRADE_SETTINGS.maxGoods, (tile.goods || 0) + 1 + Math.floor(tile.workers / 4));
             }
             if (isConsumer(tile) && tile.workers > 0 && (tile.stock || 0) > 0) {
-                bonusIncome += TRADE_SETTINGS.stockBonusIncome;
-                if (state.trade.tick % 2 === 0) {
+                bonusIncome += TRADE_SETTINGS.stockBonusIncome + Math.floor(tile.workers / 2);
+                if (state.trade.tick % 3 === 0) {
                     tile.stock = Math.max(0, (tile.stock || 0) - 1);
                 }
             }
@@ -84,7 +84,8 @@ function tradeTick() {
 function updateTradeCarts(deltaMs) {
     if (!state.trade?.carts?.length) return;
     const carts = state.trade.carts;
-    const speed = TRADE_SETTINGS.cartSpeedTilesPerMs * (deltaMs || 16);
+    const weatherSlowdown = typeof getEffectiveWeatherIntensity === 'function' ? (1 - getEffectiveWeatherIntensity() * 0.35) : 1;
+    const speed = TRADE_SETTINGS.cartSpeedTilesPerMs * (deltaMs || 16) * weatherSlowdown;
     const remaining = [];
     for (const cart of carts) {
         if (cart.pathIndex >= cart.path.length) {
@@ -97,7 +98,7 @@ function updateTradeCarts(deltaMs) {
             }
             continue;
         }
-        const target = cert.path[cart.pathIndex];
+        const target = cart.path[cart.pathIndex];
         const dx = target.x - cart.x;
         const dy = target.y - cart.y;
         const dist = Math.sqrt(dx * dx + dy * dy);

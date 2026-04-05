@@ -31,88 +31,110 @@ const WEATHER_PARTICLE_BUDGET = 180;
 const WORLD_SIZE = 128;
 const TILE_SIZE = 64;
 const TICK_RATE = 1000;
+const ECONOMY = {
+    weatherProductionPenalty: {
+        clear: 0,
+        rain: 0.08,
+        storm: 0.2,
+        snow: 0.14
+    },
+    minHappiness: 5,
+    maxHappiness: 100
+};
 const BUILDINGS = {
     road: {
-        cost: 10,
+        cost: 8,
         wood: 0,
         stone: 0,
         type: 'road',
         name: 'Road',
+        upkeep: 0.2,
         color: '#555555'
     },
     house1: {
-        cost: 50,
-        wood: 10,
+        cost: 70,
+        wood: 12,
         stone: 0,
         type: 'house1',
         name: 'House I',
         popCap: 5,
+        upkeep: 1,
         color: '#e74c3c'
     },
     house2: {
-        cost: 150,
-        wood: 30,
-        stone: 10,
+        cost: 200,
+        wood: 35,
+        stone: 12,
         type: 'house2',
         name: 'House II',
         popCap: 12,
+        upkeep: 2,
         color: '#c0392b'
     },
     house3: {
-        cost: 400,
-        wood: 100,
-        stone: 40,
+        cost: 520,
+        wood: 120,
+        stone: 50,
         type: 'house3',
         name: 'House III',
-        popCap: 30,
+        popCap: 28,
+        upkeep: 4,
         color: '#922b21'
     },
     commercial: {
-        cost: 100,
-        wood: 20,
+        cost: 140,
+        wood: 25,
         stone: 0,
         type: 'commercial',
         name: 'Market',
-        jobs: 4,
-        incomePerWorker: 3,
+        jobs: 6,
+        incomePerWorker: 2.8,
+        upkeep: 3,
         color: '#3498db'
     },
     industry: {
-        cost: 150,
-        wood: 0,
+        cost: 170,
+        wood: 10,
         stone: 0,
         type: 'industry',
         name: 'Lumber Mill',
-        jobs: 5,
-        woodPerWorker: 1.5,
+        jobs: 6,
+        woodPerWorker: 1.3,
+        upkeep: 2,
         color: '#f1c40f'
     },
     quarry: {
-        cost: 200,
+        cost: 240,
         wood: 20,
         stone: 0,
         type: 'quarry',
         name: 'Quarry',
         jobs: 5,
-        stonePerWorker: 1,
+        stonePerWorker: 1.2,
+        upkeep: 2,
         color: '#95a5a6'
     },
     factory: {
-        cost: 400,
-        wood: 50,
-        stone: 20,
+        cost: 500,
+        wood: 70,
+        stone: 35,
         type: 'factory',
         name: 'Factory',
-        jobs: 10,
-        incomePerWorker: 8,
+        jobs: 14,
+        incomePerWorker: 7.5,
+        woodConsumptionPerWorker: 0.25,
+        stoneConsumptionPerWorker: 0.15,
+        upkeep: 6,
         color: '#e67e22'
     },
     park: {
-        cost: 30,
+        cost: 45,
         wood: 0,
         stone: 0,
         type: 'park',
         name: 'Small Park',
+        upkeep: 1,
+        happinessBoost: 5,
         color: '#27ae60'
     },
     bulldoze: {
@@ -147,6 +169,9 @@ let state = {
     stone: 0,
     population: 0,
     populationCap: 0,
+    happiness: 60,
+    demand: 0,
+    netIncome: 0,
     day: 1,
     selectedTool: 'select',
     grid: [],
@@ -169,6 +194,7 @@ let state = {
     isPaused: false,
     weatherEnabled: true,
     weatherIntensityMultiplier: 1,
+    wasPausedBeforeModal: false,
     trade: {carts: [], tick: 0}
 };
 let camera = {
@@ -195,41 +221,41 @@ let canvas, ctx;
 let minimapCanvas, minimapCtx;
 let hasStarted = false;
 const tutorialSteps = [
-    {id: 'intro', text: 'Welcome to City Builder! you can drag to pan and scroll to zoom!', autoAdvance: 3500},
+    {id: 'intro', text: 'Welcome to City Builder. Drag to pan, scroll to zoom, and start with roads.', autoAdvance: 3500},
     {id: 'road', text: 'Select the Road tool and place a Road tile', event: 'build:road'},
-    {id: 'house', text: 'Yay! Now place a House I next to your road', event: 'build:house1'},
-    {id: 'market', text: 'Build a Market to create jobs and incomr', event: 'build:commercial'}
+    {id: 'house', text: 'Great. Place a House I near your road network.', event: 'build:house1'},
+    {id: 'market', text: 'Build a Market to create jobs and income.', event: 'build:commercial'}
 ];
 const OBJECTIVES = [
     {
         id: 'build_roads',
-        description: 'Build 3 Roads to start your street grid.',
-        requirements: {build: {road: 3}},
-        reward: {money: 50}
+        description: 'Build 5 Roads to lay out a starter network.',
+        requirements: {build: {road: 5}},
+        reward: {money: 80}
     },
     {
         id: 'populate_settlement',
-        description: 'Reach a population of 5 by building housing.',
-        requirements: {population: 5},
-        reward: {money: 100, wood: 20}
+        description: 'Reach a population of 8 by improving housing.',
+        requirements: {population: 8},
+        reward: {money: 120, wood: 20}
     },
     {
         id: 'open_market',
-        description: 'Construct a Market to create jobs and income',
+        description: 'Construct a Market to create jobs and local trade.',
         requirements: {build: {commercial: 1}},
-        reward: {money: 150}
+        reward: {money: 170}
     },
     {
         id: 'staff_industry',
-        description: 'Employ 5 citizens in job buildings',
-        requirements: {employed: 5},
-        reward: {money: 100, stone: 20}
+        description: 'Employ 10 citizens in active workplaces.',
+        requirements: {employed: 10},
+        reward: {money: 150, stone: 20}
     },
     {
         id: 'grow_treasury',
-        description: 'Collect $2k',
-        requirements: {money: 2000},
-        reward: {wood: 40, stone: 20}
+        description: 'Grow your treasury to $3,500 while staying stable.',
+        requirements: {money: 3500},
+        reward: {wood: 60, stone: 30}
     }
 ]
 let tutorial = {active: true, stepIndex: 0};
@@ -245,7 +271,7 @@ function init() {
     loadSprites();
     resizeCanvas();
     setupInputs();
-    setupSettingsControls();
+    updateSettingsControls();
     generateWorld();
     ensureTradeDataOnGrid();
     centerCamera();
@@ -254,6 +280,159 @@ function init() {
     startGameLoop();
     requestAnimationFrame(renderLoop);
     startTutorial();
+}
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function getWeatherProductionPenalty() {
+    const weatherType = state.weather?.type || 'clear';
+    const penalty = ECONOMY.weatherProductionPenalty[weatherType] || 0;
+    return penalty * getEffectiveWeatherIntensity();
+}
+
+function getAdjacentTiles(cx, cy) {
+    const tiles = [];
+    const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+    for (const [dx, dy] of dirs) {
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if (nx >= 0 && nx < WORLD_SIZE && ny >= 0 && ny < WORLD_SIZE) {
+            tiles.push(state.grid[ny][nx]);
+        }
+    }
+    return tiles;
+}
+
+function getCityMetrics() {
+    let houseCount = 0;
+    let connectedHomes = 0;
+    let parks = 0;
+    let upkeep = 0;
+    let availableJobs = 0;
+
+    for (let y = 0; y < WORLD_SIZE; y++) {
+        for (let x = 0; x < WORLD_SIZE; x++) {
+            const tile = state.grid[y][x];
+            const b = BUILDINGS[tile.type];
+            if (!b) continue;
+
+            upkeep += b.upkeep || 0;
+            if (b.jobs) availableJobs += b.jobs;
+            if (tile.type === 'park') parks++;
+
+            if (tile.type.startsWith('house')) {
+                houseCount++;
+                const connected = getAdjacentTiles(x, y).some(n => n.type === 'road');
+                if (connected) connectedHomes++;
+            }
+        }
+    }
+
+    return {
+        houseCount,
+        connectedHomes,
+        parks,
+        upkeep,
+        availableJobs
+    };
+}
+
+function updateCityMoodAndDemand(metrics) {
+    const pop = Math.max(1, state.population);
+    const jobRatio = clamp(metrics.availableJobs / pop, 0, 1.3);
+    const employedRatio = clamp(state.employedCount / pop, 0, 1);
+    const roadAccess = metrics.houseCount > 0 ? (metrics.connectedHomes / metrics.houseCount) : 1;
+    const parkPerCapita = metrics.parks / pop;
+
+    const happinessRaw = 55
+        + employedRatio * 26
+        + roadAccess * 18
+        + Math.min(14, parkPerCapita * 35)
+        + Math.max(-8, (jobRatio - 0.7) * 14);
+
+    state.happiness = Math.round(clamp(happinessRaw, ECONOMY.minHappiness, ECONOMY.maxHappiness));
+
+    const housingPressure = state.populationCap > state.population ? 1 : -0.35;
+    const demandRaw = (state.happiness - 50) / 35 + (jobRatio - 0.75) + housingPressure;
+    state.demand = Math.round(clamp(demandRaw * 100, -100, 100));
+}
+
+function adjustPopulation() {
+    if (state.populationCap <= 0) return;
+    const freeHousing = Math.max(0, state.populationCap - state.population);
+    const positiveDemand = Math.max(0, state.demand) / 100;
+    const growthChance = clamp((state.happiness - 45) / 110 + positiveDemand * 0.6, 0, 0.65);
+
+    if (freeHousing > 0 && Math.random() < growthChance) {
+        state.population++;
+        spawnAgents();
+        return;
+    }
+
+    const declineRisk = clamp((38 - state.happiness) / 80 + Math.max(0, -state.demand) / 180, 0, 0.55);
+    if (state.population > 0 && Math.random() < declineRisk) {
+        state.population--;
+        if (state.agents.length > state.population) {
+            state.agents.splice(state.population);
+        }
+    }
+}
+
+function simulateEconomyTick() {
+    let wageIncome = 0;
+    let producedWood = 0;
+    let producedStone = 0;
+    let consumedWood = 0;
+    let consumedStone = 0;
+
+    const productionFactor = 1 - getWeatherProductionPenalty();
+
+    for (let y = 0; y < WORLD_SIZE; y++) {
+        for (let x = 0; x < WORLD_SIZE; x++) {
+            const tile = state.grid[y][x];
+            const building = BUILDINGS[tile.type];
+            if (!building || tile.workers <= 0) continue;
+
+            if (building.incomePerWorker) {
+                const amount = tile.workers * building.incomePerWorker * productionFactor;
+                wageIncome += amount;
+                if (Math.random() < 0.15) {
+                    spawnFloatingText(x, y, `+$${Math.floor(amount)}`, '#2ecc71');
+                }
+            }
+            if (building.woodPerWorker) {
+                producedWood += tile.workers * building.woodPerWorker * productionFactor;
+            }
+            if (building.stonePerWorker) {
+                producedStone += tile.workers * building.stonePerWorker * productionFactor;
+            }
+            if (building.woodConsumptionPerWorker) {
+                consumedWood += tile.workers * building.woodConsumptionPerWorker;
+            }
+            if (building.stoneConsumptionPerWorker) {
+                consumedStone += tile.workers * building.stoneConsumptionPerWorker;
+            }
+        }
+    }
+
+    const tradeBonus = typeof tradeTick === 'function' ? tradeTick() : 0;
+    const metrics = getCityMetrics();
+    updateCityMoodAndDemand(metrics);
+
+    // Classic/simple economy mode: money comes from productive work and trade.
+    const netMoney = wageIncome + tradeBonus;
+    const netWood = producedWood - consumedWood;
+    const netStone = producedStone - consumedStone;
+
+    state.money += Math.floor(netMoney);
+    state.wood = Math.max(0, state.wood + Math.floor(netWood));
+    state.stone = Math.max(0, state.stone + Math.floor(netStone));
+    state.netIncome = Math.floor(netMoney);
+
+    adjustPopulation();
+    recalculateJobs();
 }
 function resizeCanvas() {
     canvas.width = canvas.parentElement.clientWidth;
@@ -396,7 +575,8 @@ function drawTile(tile) {
     const py = tile.y * TILE_SIZE;
 
     const sprite = SPRITES[tile.type];
-    if (sprite && sprite.complete) {
+    const hasValidSprite = sprite && sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
+    if (hasValidSprite) {
         ctx.drawImage(sprite, px, py, TILE_SIZE, TILE_SIZE);
     } else {
         let color = TERRAIN_COLORS[tile.type] || '#ff00ff';
@@ -468,6 +648,10 @@ function loadGame() {
         };
         if (typeof state.weatherEnabled === 'undefined') state.weatherEnabled = true;
         if (typeof state.weatherIntensityMultiplier === 'undefined') state.weatherIntensityMultiplier = 1;
+        if (typeof state.happiness === 'undefined') state.happiness = 60;
+        if (typeof state.demand === 'undefined') state.demand = 0;
+        if (typeof state.netIncome === 'undefined') state.netIncome = 0;
+        if (typeof state.wasPausedBeforeModal === 'undefined') state.wasPausedBeforeModal = false;
         const defaultObjectives = {
             activeIndex: 0,
             progress: {build: {}},
@@ -511,7 +695,7 @@ function selectTool(toolName) {
     for (let button of buttons) {
         if (toolName === 'select' && button.innerText.includes('Cursor')) button.classList.add('active');
         else if (BUILDINGS[toolName] && button.innerText.includes(BUILDINGS[toolName].name)) button.classList.add('active');
-        else if (toolName === 'bulldoze' && button.innerText.includes('Bulldoze')) button.classList.add('active');
+        else if (toolName === 'bulldoze' && (button.innerText.includes('Bulldoze') || button.innerText.includes('Demolish'))) button.classList.add('active');
     }
 }
 function updateSettingsControls() {
@@ -686,13 +870,19 @@ function getAdjacentRoads(cx, cy) {
     }
     return roads;
 }
+
+function hasAdjacentRoad(cx, cy) {
+    return getAdjacentRoads(cx, cy).length > 0;
+}
 function ensureTradeDataOnGrid() {
     for (let y = 0; y < WORLD_SIZE; y++) {
         for (let x = 0; x < WORLD_SIZE; x++) {
             const tile = state.grid[y][x];
-            tile.goods = tile.goods;
+            tile.goods = tile.goods || 0;
             tile.stock = tile.stock || 0;
             tile.tradeCooldown = tile.tradeCooldown || 0;
+            tile.workers = tile.workers || 0;
+            tile.maxWorkers = tile.maxWorkers || 0;
         }
     }
 }
@@ -806,42 +996,12 @@ function startGameLoop() {
         const previousDay = state.day;
         updateTimeAndWeather(TICK_RATE);
         const newDayStarted = state.day !== previousDay;
-        if (state.population < state.populationCap) {
-            state.population++;
-            spawnAgents();
-            updateUI();
-        }
-        let dailyIncome = 0;
-        let dailyWood = 0;
-        let dailyStone = 0;
-        for (let y = 0; y < WORLD_SIZE; y++) {
-            for (let x = 0; x < WORLD_SIZE; x++) {
-                let tile = state.grid[y][x];
-                if (tile.workers > 0) {
-                    let b = BUILDINGS[tile.type];
-                    if (b.incomePerWorker) {
-                        const inc = (tile.workers * b.incomePerWorker);
-                        dailyIncome += inc;
-                        spawnFloatingText(x, y, `+$${Math.floor(inc)}`, '#2ecc71');
-                    }
-                    if (b.woodPerWorker) {
-                        const w = (tile.workers * b.woodPerWorker);
-                        dailyWood += w;
-                    }
-                    if (b.stonePerWorker) {
-                        const s = (tile.workers * b.stonePerWorker);
-                        dailyStone += s;
-                    }
-                }
-            }
-        }
-        const tradeBonus = typeof tradeTick === 'function' ? tradeTick() : 0;
-        state.money += Math.floor(dailyIncome);
-        state.wood += Math.floor(dailyWood);
-        state.stone += Math.floor(dailyStone);
+        simulateEconomyTick();
         updateUI();
         checkObjectiveCompletion();
-        if (newDayStarted && state.day % 10 === 0) showMessage(`Day ${state.day}: Income Generated`);
+        if (newDayStarted && state.day % 7 === 0) {
+            showMessage(`Weekly report: Net $${state.netIncome}, Happiness ${state.happiness}%`);
+        }
     }, TICK_RATE)
 }
 function renderLoop(timestamp) {
@@ -856,7 +1016,7 @@ function renderLoop(timestamp) {
     const endColumn = Math.floor(Math.min(WORLD_SIZE, (viewX + viewW) / TILE_SIZE + 1));
     const startRow = Math.floor(Math.max(0, viewY / TILE_SIZE));
     const endRow = Math.floor(Math.min(WORLD_SIZE, (viewY + viewH) / TILE_SIZE + 1));
-    const delta = lastFrameTime ? (timestamp - lastFrameTime) : 16;
+    let delta = lastFrameTime ? (timestamp - lastFrameTime) : 16;
     lastFrameTime = timestamp;
     if (!state.isPaused) {
         updateWeatherParticles(delta);
@@ -881,6 +1041,7 @@ function renderLoop(timestamp) {
     if (typeof updateTradeCarts === 'function') updateTradeCarts(delta);
     if (typeof renderTradeCarts === 'function') renderTradeCarts(ctx);
     if (!state.isPaused) updateAndRenderPersonAnimations(timestamp);
+    drawPlacementPreview();
     if (input.hoverX >= 0 && input.hoverX < WORLD_SIZE && input.hoverY >= 0 && input.hoverY < WORLD_SIZE) {
         ctx.strokeStyle = 'white';
         ctx.lineWidth = 2;
@@ -1120,6 +1281,10 @@ function handleMapClick() {
         showMessage("Cannot build here!");
         return;
     }
+    if (tool.type !== 'road' && tool.type !== 'park' && !hasAdjacentRoad(x, y)) {
+        showMessage('Building must connect to a road');
+        return;
+    }
     const hasMoney = state.money >= tool.cost;
     const hasWood = state.wood >= (tool.wood || 0);
     const hasStone = state.stone >= (tool.stone || 0);
@@ -1156,20 +1321,16 @@ function showSelectionTooltip(tile, screenX, screenY) {
     const container = document.getElementById('game-container');
     if (!tooltip || !container) return;
     const building = BUILDINGS[tile.type];
-    if (!building) {
-        hideSelectionTooltip();
-        return;
-    }
-
     const lines = [];
     if (building) {
         lines.push(`<strong>${building.name}</strong>`);
         lines.push(`<div>Type: ${building.type}</div>`);
-        if (building.populationCap) lines.push(`<div>Population Cap: ${building.popCap}</div>`);
+        if (building.popCap) lines.push(`<div>Population Cap: ${building.popCap}</div>`);
         if (building.jobs) lines.push(`<div>Jobs: ${tile.workers}/${building.jobs}</div>`);
         if (building.incomePerWorker) lines.push(`<div>Income/Worker: $${building.incomePerWorker}</div>`);
         if (building.woodPerWorker) lines.push(`<div>Wood/Worker: ${building.woodPerWorker}</div>`);
         if (building.stonePerWorker) lines.push(`<div>Stone/Worker: ${building.stonePerWorker}</div>`);
+        if (building.upkeep) lines.push(`<div>Maintenance: $${building.upkeep}/tick</div>`);
         if (typeof getTradeInfoLines === 'function') {
             lines.push(...getTradeInfoLines(tile));
         }
@@ -1211,7 +1372,7 @@ function isBuildableTerrain(type) {
 function getUpgradeOptions(tileType) {
     if (tileType === 'house1') {
         return [
-            formatUpgrade('house2'),
+            formatUpgradeLine('house2'),
             formatUpgradeLine('house3')
         ];
     }
@@ -1238,6 +1399,7 @@ function hideSelectionTooltip() {
 function openSettings() {
     const modal = document.getElementById('settings-modal');
     if (!modal) return;
+    state.wasPausedBeforeModal = state.isPaused;
     state.isPaused = true;
     updatePauseButton();
     modal.classList.remove('hidden');
@@ -1245,6 +1407,8 @@ function openSettings() {
 function closeSettings() {
     const modal = document.getElementById('settings-modal');
     if (!modal) return;
+    state.isPaused = state.wasPausedBeforeModal;
+    updatePauseButton();
     modal.classList.add('hidden');
 }
 function togglePause() {
@@ -1357,11 +1521,13 @@ function drawPlacementPreview() {
     } else if (tool) {
         const isWater = tileData.type === 'water';
         const isOccupied = tileData.type !== 'grass';
+        const needsRoad = tool.type !== 'road' && tool.type !== 'park';
         let isUpgrade = false;
         if ((tileData.type === 'house1' && tool.type === 'house2') || (tileData.type === 'house1' && tool.type === 'house3') || (tileData.type === 'house2' && tool.type === 'house3')) {
             isUpgrade = true;
         }
-        if (!isWater && (!isOccupied || isUpgrade)) {
+        const connected = hasAdjacentRoad(x, y);
+        if (!isWater && (!isOccupied || isUpgrade) && (!needsRoad || connected)) {
             isValid = true;
             color = 'rgba(46, 204, 113, 0.5)';
         }
@@ -1383,6 +1549,20 @@ function updateUI() {
     document.getElementById('stat-population').innerText = state.population;
     document.getElementById('stat-population-cap').innerText = state.populationCap;
     document.getElementById('stat-employed').innerText = `${state.employedCount}`;
+    const happinessLabel = document.getElementById('stat-happiness');
+    if (happinessLabel) happinessLabel.innerText = `${state.happiness}%`;
+    const demandLabel = document.getElementById('stat-demand');
+    if (demandLabel) {
+        demandLabel.innerText = `${state.demand > 0 ? '+' : ''}${state.demand}`;
+        demandLabel.classList.toggle('positive', state.demand > 0);
+        demandLabel.classList.toggle('negative', state.demand < 0);
+    }
+    const netLabel = document.getElementById('stat-net');
+    if (netLabel) {
+        netLabel.innerText = `${state.netIncome >= 0 ? '+' : ''}$${state.netIncome}`;
+        netLabel.classList.toggle('positive', state.netIncome >= 0);
+        netLabel.classList.toggle('negative', state.netIncome < 0);
+    }
     document.getElementById('stat-day').innerText = state.day;
     const timeLabel = document.getElementById('stat-time');
     if (timeLabel) timeLabel.innerText = formatTimeOfDay(state.timeOfDay);

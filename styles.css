@@ -11,6 +11,8 @@ header {
     padding: 10px;
     display: flex;
     justify-content: space-around;
+    flex-wrap: wrap;
+    gap: 8px;
     border-bottom: 2px solid #191919;
 }
 #objective-panel {
@@ -48,6 +50,16 @@ header {
 .stat-box {
     font-weight: bold;
     font-size: 0.9rem;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 7px;
+    padding: 4px 8px;
+}
+.positive {
+    color: #1f8a48;
+}
+.negative {
+    color: #a82828;
 }
 #game-container {
     flex: 1;
@@ -55,8 +67,15 @@ header {
     justify-content: center;
     align-items:  center;
     background-color: #9f9c9c;
-    overflow: auto;
+    overflow: hidden;
     position: relative;
+    min-height: 280px;
+}
+
+#game-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 #agent-layer {
@@ -297,4 +316,24 @@ footer {
     display: flex;
     gap: 10px;
     justify-content: center;
+}
+
+@media (max-width: 900px) {
+    header {
+        justify-content: flex-start;
+        padding: 8px;
+    }
+    .stat-box {
+        font-size: 0.8rem;
+    }
+    #objective-panel {
+        max-width: calc(100% - 16px);
+        margin-top: 8px;
+    }
+    #minimap-container {
+        width: 120px;
+        height: 120px;
+        bottom: 14px;
+        right: 14px;
+    }
 }
