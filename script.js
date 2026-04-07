@@ -1299,12 +1299,13 @@ function handleMapClick() {
     hideSelectionTooltip();
     
     if (state.selectedTool === 'bulldoze') {
-        if (tileData.type === 'grass' || tileData.type === 'water') return;
+        if (tileData.type === 'grass') return;
         if (state.money >= tool.cost) {
             state.money -= tool.cost;
             spawnFloatingText(x, y, `-$${tool.cost}`, '#e74c3c');
-            if (BUILDINGS[tileData.type].popCap) {
-                state.populationCap -= BUILDINGS[tileData.type].popCap;
+            const demolishedBuilding = BUILDINGS[tileData.type];
+            if (demolishedBuilding?.popCap) {
+                state.populationCap -= demolishedBuilding.popCap;
                 state.agents = state.agents.filter(a => !(a.homeX === x && a.homeY === y));
             }
             tileData.type = 'grass';
@@ -1556,7 +1557,7 @@ function drawPlacementPreview() {
     let isValid = false;
     let color = 'rgba(231, 76, 60, 0.5)';
     if (state.selectedTool === 'bulldoze') {
-        if (tileData.type !== 'grass' && tileData.type !== 'water') {
+        if (tileData.type !== 'grass') {
             isValid = true;
             color = 'rgba(231, 76, 60, 0.6)';
         }
