@@ -221,10 +221,11 @@ let canvas, ctx;
 let minimapCanvas, minimapCtx;
 let hasStarted = false;
 const tutorialSteps = [
-    {id: 'intro', text: 'Welcome to City Builder. Drag to pan, scroll to zoom, and start with roads.', autoAdvance: 3500},
-    {id: 'road', text: 'Select the Road tool and place a Road tile', event: 'build:road'},
-    {id: 'house', text: 'Great. Place a House I near your road network.', event: 'build:house1'},
-    {id: 'market', text: 'Build a Market to create jobs and income.', event: 'build:commercial'}
+    {id: 'intro', text: 'Welcome to City Builder. Drag to pan with cursor, scroll to zoom, and start with roads.', autoAdvance: 3500},
+    {id: 'road', text: 'Build 5 Roads to lay out your starter network.', event: 'build:road', requiredCount: 5},
+    {id: 'house', text: 'Yay! Now build 2 House I near your roads.', event: 'build:house1', requiredCount: 2},
+    {id: 'mill', text: 'Build a Lumber mill to produce more wood.', event: 'build:industry'},
+    {id: 'market', text: 'Then build a market whenever you are ready.', event: 'build:commercial'}
 ];
 const OBJECTIVES = [
     {
@@ -258,7 +259,7 @@ const OBJECTIVES = [
         reward: {wood: 60, stone: 30}
     }
 ]
-let tutorial = {active: true, stepIndex: 0};
+let tutorial = {active: true, stepIndex: 0, progress: {}};
 let tutorialTimeout = null;
 function init() {
     canvas = document.getElementById('game-canvas');
@@ -1736,6 +1737,7 @@ function showMessage(message) {
 function startTutorial() {
     if (!tutorial.active) return;
     tutorial.stepIndex = 0;
+    tutorial.progress = {};
     showTutorialStep();
 }
 function showTutorialStep() {
@@ -1769,6 +1771,12 @@ function triggerTutorialEvent(eventId) {
     const step = tutorialSteps[tutorial.stepIndex];
     if (!step || !step.event) return;
     if (step.event === eventId) {
+        const requiredCount = step.requiredCount || 1;
+        tutorial.progress[eventId] = (tutorial.progress[eventId] || 0) + 1;
+        if (tutorial.progress[eventId] < requiredCount) {
+            showMessage(`${step.text} (${tutorial.progress[eventId]}/${requiredCount})`);
+            return;
+        }
         advanceTutorial();
     }
 }
