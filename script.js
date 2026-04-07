@@ -235,10 +235,16 @@ const OBJECTIVES = [
         reward: {money: 80}
     },
     {
-        id: 'populate_settlement',
-        description: 'Reach a population of 8 by improving housing.',
-        requirements: {population: 8},
-        reward: {money: 120, wood: 20}
+        id: 'build_houses',
+        description: 'Build 2 House I near your roads.',
+        requirements: {build: {house1: 2}},
+        reward: {money: 120}
+    },
+    {
+        id: 'build_lumber_mill',
+        description: 'Build a Lumber Mill to produce more wood.',
+        requirements: {build: {industry: 1}},
+        reward: {money: 140, wood: 20}
     },
     {
         id: 'open_market',
